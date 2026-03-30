@@ -117,8 +117,8 @@ mod platform {
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumWindows,
-        GA_ROOTOWNER, GWL_EXSTYLE, GW_OWNER, GetAncestor, GetClassNameW, GetForegroundWindow,
-        GetWindow, GetWindowLongW, GetWindowRect, GetWindowTextLengthW,
+        GA_ROOTOWNER, GWL_EXSTYLE, GetAncestor, GetClassNameW, GetForegroundWindow,
+        GetWindowLongW, GetWindowRect, GetWindowTextLengthW,
         GetWindowTextW, GetWindowThreadProcessId, HMENU, IsIconic, IsWindow, IsWindowVisible,
         HWND_TOPMOST, LAYERED_WINDOW_ATTRIBUTES_FLAGS, LWA_ALPHA, MSG, PM_REMOVE, PeekMessageW,
         RegisterClassW, SET_WINDOW_POS_FLAGS, SW_HIDE, SW_SHOWNOACTIVATE,
@@ -635,6 +635,7 @@ mod platform {
                 .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
                 .then_with(|| left.window_id.cmp(&right.window_id))
         });
+        tracing::debug!(candidate_count = windows.len(), "enumerated visible attachable windows");
         Ok(windows)
     }
 
@@ -659,11 +660,6 @@ mod platform {
             }
             if IsIconic(hwnd).as_bool() {
                 return Ok(None);
-            }
-            if let Ok(owner) = GetWindow(hwnd, GW_OWNER) {
-                if !owner.0.is_null() {
-                    return Ok(None);
-                }
             }
             if (GetWindowLongW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW.0) != 0 {
                 return Ok(None);

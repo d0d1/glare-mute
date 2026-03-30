@@ -1,17 +1,22 @@
 import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const [, , mode = "test"] = process.argv;
+const [, , mode = "test", ...rest] = process.argv;
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDirectory, "..");
+
 const args =
   mode === "install"
-    ? ["exec", "playwright", "install", "chromium"]
-    : ["exec", "playwright", "test"];
+    ? ["exec", "playwright", "install", "chromium", ...rest]
+    : ["exec", "playwright", mode, ...rest];
 
 const execution = spawnSync("pnpm", args, {
-  cwd: process.cwd(),
+  cwd: repoRoot,
   stdio: "inherit",
   env: {
     ...process.env,
-    PLAYWRIGHT_BROWSERS_PATH: ".cache/ms-playwright",
+    PLAYWRIGHT_BROWSERS_PATH: path.join(repoRoot, ".cache", "ms-playwright"),
   },
 });
 

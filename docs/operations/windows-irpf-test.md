@@ -37,11 +37,12 @@ The desktop shell uses the live frontend from the dev server and writes logs to:
 
 1. Launch the IRPF desktop app and make sure its main window is visible.
 2. Bring `GlareMute` to the foreground.
-3. Click `Refresh Windows`.
-4. Find the IRPF window in the `Window Picker` list.
-5. Click `Attach Greyscale Invert`.
-6. Use `Suspend Lens` if you need an immediate off switch without losing the selected target.
-7. Use `Detach Lens` if you want to drop the attachment entirely.
+3. In `Visible windows`, click `Refresh list`.
+4. Select the IRPF window from the visible window list.
+5. In `Lens`, click `Attach Greyscale Invert`.
+6. Use `Suspend lens` if you need an immediate off switch without losing the selected target.
+7. Use `Detach lens` if you want to drop the attachment entirely.
+8. Open `Support & diagnostics` only if you need logs or a debug report.
 
 ## Known limits of this slice
 

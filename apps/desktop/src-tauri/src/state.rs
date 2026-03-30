@@ -115,13 +115,16 @@ impl ManagedState {
     }
 
     pub fn refresh_window_candidates(&self) -> Result<AppSnapshot> {
+        let snapshot = self.snapshot()?;
         self.record_event(
             RuntimeEventLevel::Debug,
             "picker".to_string(),
-            "window list refreshed".to_string(),
+            format!(
+                "window list refreshed ({} visible candidates)",
+                snapshot.window_candidates.len()
+            ),
         );
-
-        self.snapshot()
+        Ok(snapshot)
     }
 
     pub fn attach_window(
