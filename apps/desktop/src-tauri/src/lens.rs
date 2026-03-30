@@ -105,6 +105,7 @@ mod platform {
 #[cfg(target_os = "windows")]
 mod platform {
     use std::ffi::c_void;
+    use std::mem::size_of;
     use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::{self, JoinHandle};
@@ -118,6 +119,7 @@ mod platform {
     use windows::Win32::Foundation::{
         COLORREF, CloseHandle, GetLastError, HWND, LPARAM, LRESULT, RECT,
     };
+    use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Threading::{
         GetCurrentProcessId, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -130,14 +132,14 @@ mod platform {
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumWindows,
-        GA_ROOTOWNER, GWL_EXSTYLE, GetAncestor, GetClassNameW, GetForegroundWindow, GetWindowLongW,
-        GetWindowRect, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, HMENU,
-        HWND_TOPMOST, IsIconic, IsWindow, IsWindowVisible, LAYERED_WINDOW_ATTRIBUTES_FLAGS,
-        LWA_ALPHA, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SET_WINDOW_POS_FLAGS, SW_HIDE,
-        SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
-        SetLayeredWindowAttributes, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
-        WINDOW_STYLE, WNDCLASSW, WS_CHILD, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-        WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE,
+        GET_WINDOW_CMD, GW_HWNDPREV, GWL_EXSTYLE, GetClassNameW, GetForegroundWindow, GetWindow,
+        GetWindowLongW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
+        GetWindowThreadProcessId, HMENU, HWND_TOP, HWND_TOPMOST, IsIconic, IsWindow,
+        IsWindowVisible, LAYERED_WINDOW_ATTRIBUTES_FLAGS, LWA_ALPHA, MSG, PM_REMOVE, PeekMessageW,
+        RegisterClassW, SET_WINDOW_POS_FLAGS, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE,
+        SWP_NOOWNERZORDER, SWP_NOZORDER, SetLayeredWindowAttributes, SetWindowPos, ShowWindow,
+        TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSW, WS_CHILD, WS_EX_LAYERED,
+        WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE,
     };
     use windows::core::{BOOL, Error as WindowsError, PCWSTR, w};
 
@@ -282,6 +284,11 @@ mod platform {
         current_target_hwnd: Option<HWND>,
         current_preset: Option<VisualPreset>,
         suspended: bool,
+    }
+
+    struct PresentationTarget {
+        rect: RECT,
+        insert_after: HWND,
     }
 
     fn lens_thread_main(
@@ -558,9 +565,9 @@ mod platform {
                 return;
             }
 
-            match visible_target_rect(target_hwnd) {
-                Ok(Some(rect)) => {
-                    if let Err(error) = self.present_target(rect) {
+            match presentation_target(target_hwnd, self.host_hwnd) {
+                Ok(Some(target)) => {
+                    if let Err(error) = self.present_target(target) {
                         tracing::warn!(?error, "failed to update magnifier overlay");
                     }
                 }
@@ -581,7 +588,8 @@ mod platform {
                 .status
         }
 
-        fn present_target(&mut self, rect: RECT) -> Result<()> {
+        fn present_target(&mut self, target: PresentationTarget) -> Result<()> {
+            let rect = target.rect;
             let width = rect.right - rect.left;
             let height = rect.bottom - rect.top;
             if width <= 0 || height <= 0 {
@@ -594,7 +602,7 @@ mod platform {
             unsafe {
                 SetWindowPos(
                     self.host_hwnd,
-                    Some(HWND_TOPMOST),
+                    Some(target.insert_after),
                     rect.left,
                     rect.top,
                     width,
@@ -779,7 +787,7 @@ mod platform {
         }))
     }
 
-    fn visible_target_rect(hwnd: HWND) -> Result<Option<RECT>> {
+    fn presentation_target(hwnd: HWND, host_hwnd: HWND) -> Result<Option<PresentationTarget>> {
         unsafe {
             if !IsWindow(Some(hwnd)).as_bool()
                 || !IsWindowVisible(hwnd).as_bool()
@@ -789,17 +797,7 @@ mod platform {
             }
         }
 
-        let foreground = unsafe { GetForegroundWindow() };
-        if foreground.0.is_null() {
-            return Ok(None);
-        }
-
-        let same_focus_family = unsafe {
-            let target_root = GetAncestor(hwnd, GA_ROOTOWNER);
-            let foreground_root = GetAncestor(foreground, GA_ROOTOWNER);
-            target_root == foreground_root
-        };
-        if !same_focus_family {
+        if is_window_cloaked(hwnd) {
             return Ok(None);
         }
 
@@ -808,7 +806,61 @@ mod platform {
             GetWindowRect(hwnd, &mut rect).context("failed to read target window bounds")?;
         }
 
-        Ok(Some(rect))
+        if rect.right <= rect.left || rect.bottom <= rect.top {
+            return Ok(None);
+        }
+
+        Ok(Some(PresentationTarget {
+            rect,
+            insert_after: desired_host_insert_after(hwnd, host_hwnd)?,
+        }))
+    }
+
+    fn desired_host_insert_after(target_hwnd: HWND, host_hwnd: HWND) -> Result<HWND> {
+        let target_is_topmost = is_topmost_window(target_hwnd);
+        let mut above_target = unsafe { GetWindow(target_hwnd, GET_WINDOW_CMD(GW_HWNDPREV.0)) }
+            .context("failed to inspect target z-order")?;
+
+        if above_target == host_hwnd {
+            above_target = unsafe { GetWindow(host_hwnd, GET_WINDOW_CMD(GW_HWNDPREV.0)) }
+                .context("failed to inspect overlay z-order")?;
+        }
+
+        if above_target.0.is_null() {
+            return Ok(if target_is_topmost {
+                HWND_TOPMOST
+            } else {
+                HWND_TOP
+            });
+        }
+
+        if !target_is_topmost && is_topmost_window(above_target) {
+            return Ok(HWND_TOP);
+        }
+
+        Ok(above_target)
+    }
+
+    fn is_topmost_window(hwnd: HWND) -> bool {
+        unsafe { (GetWindowLongW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_TOPMOST.0) != 0 }
+    }
+
+    fn is_window_cloaked(hwnd: HWND) -> bool {
+        let mut cloaked = 0u32;
+        unsafe {
+            if DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_CLOAKED,
+                &mut cloaked as *mut _ as *mut c_void,
+                size_of::<u32>() as u32,
+            )
+            .is_err()
+            {
+                return false;
+            }
+        }
+
+        cloaked != 0
     }
 
     fn window_bounds(hwnd: HWND) -> Result<Option<WindowBounds>> {

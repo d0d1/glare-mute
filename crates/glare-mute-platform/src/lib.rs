@@ -100,7 +100,7 @@ mod windows {
                     "magnificationBackend",
                     "Magnification transform",
                     CapabilityStatus::Available,
-                    "Dark and Greyscale Invert run through the Magnification API for the Windows shell.",
+                    "Dark and Greyscale Invert run through the Magnification API for the Windows shell, with z-order tracking that keeps visible targets transformed even when another app has focus.",
                 ),
                 capability(
                     "captureBackend",
