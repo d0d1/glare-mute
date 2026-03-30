@@ -25,7 +25,8 @@ pub enum EffectFamily {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VisualPreset {
-    Darken,
+    #[serde(alias = "darken")]
+    Dark,
     WarmDim,
     GreyscaleInvert,
 }
@@ -179,7 +180,7 @@ pub struct AppSnapshot {
 
 impl Default for VisualPreset {
     fn default() -> Self {
-        Self::Darken
+        Self::Dark
     }
 }
 
@@ -197,8 +198,8 @@ impl Default for AppSettings {
 pub fn default_preset_catalog() -> Vec<PresetDefinition> {
     vec![
         PresetDefinition {
-            id: VisualPreset::Darken,
-            label: "Darken".to_string(),
+            id: VisualPreset::Dark,
+            label: "Dark".to_string(),
             family: EffectFamily::Transform,
             summary: "A cooler dark treatment inspired by Windows dark surfaces.".to_string(),
         },
@@ -236,7 +237,7 @@ mod tests {
         let presets = default_preset_catalog();
 
         assert_eq!(presets.len(), 3);
-        assert_eq!(presets[0].id, VisualPreset::Darken);
+        assert_eq!(presets[0].id, VisualPreset::Dark);
         assert_eq!(presets[2].family, EffectFamily::Transform);
     }
 

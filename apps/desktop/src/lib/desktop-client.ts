@@ -1,6 +1,7 @@
 import type { AppSnapshot, RuntimeEventLevel, ThemePreference, VisualPreset } from "./contracts";
 
 const STORAGE_KEY = "glaremute:preview-snapshot";
+type LegacyVisualPreset = VisualPreset | "darken";
 
 declare global {
   interface Window {
@@ -83,7 +84,7 @@ function createMockDesktopClient(): DesktopClient {
       if (!candidate) {
         throw new Error(`No mock window found for ${windowId}.`);
       }
-      if (!["greyscaleInvert", "darken"].includes(preset)) {
+      if (!["greyscaleInvert", "dark"].includes(preset)) {
         throw new Error(`${preset} is not available in the current build.`);
       }
 
@@ -246,7 +247,9 @@ function createMockDesktopClient(): DesktopClient {
 function readSnapshot(): AppSnapshot {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) {
-    return JSON.parse(stored) as AppSnapshot;
+    const snapshot = normalizeSnapshot(JSON.parse(stored) as AppSnapshot);
+    writeSnapshot(snapshot);
+    return snapshot;
   }
 
   const snapshot = defaultSnapshot();
@@ -256,6 +259,40 @@ function readSnapshot(): AppSnapshot {
 
 function writeSnapshot(snapshot: AppSnapshot) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+}
+
+function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
+  return {
+    ...snapshot,
+    presets: snapshot.presets.map((preset) => ({
+      ...preset,
+      id: normalizePersistedPresetId(preset.id),
+      label: normalizePersistedPresetId(preset.id) === "dark" ? "Dark" : preset.label,
+    })),
+    settings: {
+      ...snapshot.settings,
+      profiles: snapshot.settings.profiles.map((profile) => ({
+        ...profile,
+        preset: normalizePersistedPresetId(profile.preset),
+      })),
+    },
+    lens: {
+      ...snapshot.lens,
+      activePreset: normalizeOptionalPresetId(snapshot.lens.activePreset),
+    },
+  };
+}
+
+function normalizePersistedPresetId(preset: LegacyVisualPreset): VisualPreset {
+  if (preset === "darken") {
+    return "dark";
+  }
+
+  return preset;
+}
+
+function normalizeOptionalPresetId(preset: LegacyVisualPreset | null): VisualPreset | null {
+  return preset === null ? null : normalizePersistedPresetId(preset);
 }
 
 function defaultSnapshot(): AppSnapshot {
@@ -271,8 +308,8 @@ function defaultSnapshot(): AppSnapshot {
     },
     presets: [
       preset(
-        "darken",
-        "Darken",
+        "dark",
+        "Dark",
         "transform",
         "A cooler dark treatment inspired by Windows dark surfaces."
       ),
@@ -313,7 +350,7 @@ function defaultSnapshot(): AppSnapshot {
           "magnificationBackend",
           "Magnification transform",
           "available",
-          "Mock preview keeps Darken and Greyscale Invert in the shared contract while native validation happens on Windows."
+          "Mock preview keeps Dark and Greyscale Invert in the shared contract while native validation happens on Windows."
         ),
         capability(
           "captureBackend",
@@ -363,8 +400,7 @@ function mockLensSummary(
   title: string,
   status: AppSnapshot["lens"]["status"]
 ) {
-  const label =
-    preset === "darken" ? "Darken" : preset === "warmDim" ? "Warm Dim" : "Greyscale Invert";
+  const label = preset === "dark" ? "Dark" : preset === "warmDim" ? "Warm Dim" : "Greyscale Invert";
 
   switch (status) {
     case "pending":

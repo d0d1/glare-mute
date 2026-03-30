@@ -50,10 +50,10 @@ describe("desktopClient mock runtime", () => {
       throw new Error("Expected a minimized mock window.");
     }
 
-    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "darken");
+    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "dark");
 
     expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
-    expect(nextSnapshot.lens.activePreset).toBe("darken");
+    expect(nextSnapshot.lens.activePreset).toBe("dark");
     expect(nextSnapshot.lens.status).toBe("pending");
   });
 

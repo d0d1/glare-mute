@@ -100,7 +100,7 @@ mod windows {
                     "magnificationBackend",
                     "Magnification transform",
                     CapabilityStatus::Available,
-                    "Darken and Greyscale Invert run through the Magnification API for the Windows shell.",
+                    "Dark and Greyscale Invert run through the Magnification API for the Windows shell.",
                 ),
                 capability(
                     "captureBackend",

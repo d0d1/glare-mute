@@ -8,7 +8,7 @@ The agreed v1 backend direction is hybrid, not monolithic.
 
 This is the zero-lag path for:
 
-- Darken
+- Dark
 - Warm Dim
 - future glare-reduction presets that do not need pixel remapping
 

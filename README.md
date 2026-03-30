@@ -5,7 +5,7 @@ GlareMute is an open-source Windows accessibility lens for bright legacy apps th
 The first native test slice is intentionally narrow:
 
 - keep a live, stable list of top-level Windows app windows, including minimized ones
-- apply either `Greyscale Invert` or `Darken` to one selected main window
+- apply either `Greyscale Invert` or `Dark` to one selected main window
 - pause or turn off the effect quickly from the app window or tray
 
 The repository is intentionally shaped for agent-driven development:

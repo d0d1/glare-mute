@@ -102,18 +102,20 @@ function App() {
       return;
     }
 
+    const nextEffectChoices = visibleEffectPresets(snapshot.presets);
     setSelectedPreset((current) =>
-      snapshot.presets.some((preset) => preset.id === current)
+      nextEffectChoices.some((preset) => preset.id === current)
         ? current
-        : (snapshot.lens.activePreset ?? DEFAULT_PRESET)
+        : snapshot.lens.activePreset &&
+            nextEffectChoices.some((preset) => preset.id === snapshot.lens.activePreset)
+          ? snapshot.lens.activePreset
+          : (nextEffectChoices[0]?.id ?? DEFAULT_PRESET)
     );
   }, [snapshot]);
 
   const allWindowCandidates = snapshot?.windowCandidates ?? [];
+  const effectChoices = visibleEffectPresets(snapshot?.presets ?? []);
   const filteredWindowCandidates = filterWindowCandidates(allWindowCandidates, windowQuery);
-  const minimizedWindowCount = filteredWindowCandidates.filter(
-    (candidate) => candidate.attachmentState === "minimized"
-  ).length;
 
   useEffect(() => {
     if (!snapshot) {
@@ -166,7 +168,7 @@ function App() {
     allWindowCandidates.find((candidate) => candidate.windowId === selectedWindowId) ?? null;
   const activeTarget = snapshot?.lens.activeTarget ?? null;
   const selectedPresetDefinition =
-    snapshot?.presets.find((preset) => preset.id === selectedPreset) ?? null;
+    effectChoices.find((preset) => preset.id === selectedPreset) ?? null;
   const selectedPresetCapability = snapshot
     ? presetCapability(snapshot.platform.capabilities, selectedPreset)
     : null;
@@ -266,7 +268,7 @@ function App() {
         <header className="product-header">
           <h1>GlareMute</h1>
           <p className="app-subtitle">
-            Choose a window and apply a relief effect without changing the rest of the desktop.
+            Choose a window and apply an effect without changing the rest of the desktop.
           </p>
         </header>
 
@@ -279,11 +281,7 @@ function App() {
         <main className="workflow-shell">
           <section className="workflow-pane window-pane">
             <PaneHeader
-              subtitle={windowListSubtitle(
-                filteredWindowCandidates.length,
-                minimizedWindowCount,
-                windowQuery
-              )}
+              subtitle={windowListSubtitle(filteredWindowCandidates.length, windowQuery)}
               title="Available windows"
             />
 
@@ -336,7 +334,7 @@ function App() {
                 onChange={(event) => setSelectedPreset(event.target.value as VisualPreset)}
                 value={selectedPreset}
               >
-                {snapshot.presets.map((preset) => (
+                {effectChoices.map((preset) => (
                   <option key={preset.id} value={preset.id}>
                     {preset.label}
                   </option>
@@ -408,10 +406,7 @@ function App() {
             </section>
 
             <section className="pane-section selected-window-section">
-              <PaneHeader
-                subtitle="The selected window is where Apply goes."
-                title="Selected window"
-              />
+              <PaneHeader title="Selected window" />
               {selectedWindow ? (
                 <SelectedWindowDetails candidate={selectedWindow} devMode={snapshot.devMode} />
               ) : (
@@ -445,9 +440,7 @@ function App() {
                   </option>
                 ))}
               </select>
-              <p className="body-copy">
-                {themeDescription(snapshot.settings.themePreference, effectiveTheme)}
-              </p>
+              <p className="body-copy">{themeDescription(snapshot.settings.themePreference)}</p>
             </section>
           </div>
         </details>
@@ -524,11 +517,11 @@ function App() {
   );
 }
 
-function PaneHeader({ subtitle, title }: { subtitle: string; title: string }) {
+function PaneHeader({ subtitle, title }: { subtitle?: string; title: string }) {
   return (
     <div className="pane-copy">
       <h2>{title}</h2>
-      <p>{subtitle}</p>
+      {subtitle ? <p>{subtitle}</p> : null}
     </div>
   );
 }
@@ -677,7 +670,7 @@ function filterWindowCandidates(candidates: WindowDescriptor[], query: string) {
 
 function presetCapability(capabilities: CapabilityDescriptor[], preset: VisualPreset) {
   switch (preset) {
-    case "darken":
+    case "dark":
       return capabilityById(capabilities, "magnificationBackend");
     case "warmDim":
       return capabilityById(capabilities, "tintBackend");
@@ -738,13 +731,9 @@ function applyHint(
   return "Ready to apply the selected effect to this window.";
 }
 
-function windowListSubtitle(totalCount: number, minimizedCount: number, query: string) {
+function windowListSubtitle(totalCount: number, query: string) {
   if (query.trim()) {
     return `${totalCount} windows match.`;
-  }
-
-  if (minimizedCount > 0) {
-    return `${totalCount} windows shown. Minimized windows stay in the list.`;
   }
 
   return `${totalCount} windows shown. Updates automatically.`;
@@ -847,12 +836,9 @@ function themeOptionLabel(theme: ThemePreference | "light" | "dark" | "greyscale
   }
 }
 
-function themeDescription(
-  themePreference: ThemePreference,
-  effectiveTheme: "light" | "dark" | "greyscale-invert"
-) {
+function themeDescription(themePreference: ThemePreference) {
   if (themePreference === "system") {
-    return `Follow the operating system theme. Current result: ${themeOptionLabel(effectiveTheme)}.`;
+    return "Follow the operating system theme.";
   }
 
   if (themePreference === "greyscaleInvert") {
@@ -883,8 +869,8 @@ function statusTone(status: CapabilityStatus): StatusTone {
 
 function presetLabel(preset: VisualPreset | null) {
   switch (preset) {
-    case "darken":
-      return "Darken";
+    case "dark":
+      return "Dark";
     case "warmDim":
       return "Warm Dim";
     case "greyscaleInvert":
@@ -892,6 +878,10 @@ function presetLabel(preset: VisualPreset | null) {
     case null:
       return "The selected effect";
   }
+}
+
+function visibleEffectPresets(presets: PresetDefinition[]) {
+  return presets.filter((preset) => preset.id !== "warmDim");
 }
 
 function windowEffectLabel(status: AppSnapshot["lens"]["status"]) {

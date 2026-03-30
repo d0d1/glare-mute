@@ -187,7 +187,7 @@ mod platform {
         }
 
         pub fn attach_window(&self, window_id: &str, preset: VisualPreset) -> Result<LensSnapshot> {
-            if !matches!(preset, VisualPreset::GreyscaleInvert | VisualPreset::Darken) {
+            if !matches!(preset, VisualPreset::GreyscaleInvert | VisualPreset::Dark) {
                 bail!("This effect is not implemented in the native Windows path right now.")
             }
 
@@ -937,7 +937,7 @@ mod platform {
         }
     }
 
-    fn darken_effect() -> MAGCOLOREFFECT {
+    fn dark_effect() -> MAGCOLOREFFECT {
         MAGCOLOREFFECT {
             transform: [
                 -0.17, -0.31, -0.08, 0.0, 0.0, -0.18, -0.36, -0.10, 0.0, 0.0, -0.20, -0.38, -0.12,
@@ -948,7 +948,7 @@ mod platform {
 
     fn effect_for_preset(preset: VisualPreset) -> Result<MAGCOLOREFFECT> {
         match preset {
-            VisualPreset::Darken => Ok(darken_effect()),
+            VisualPreset::Dark => Ok(dark_effect()),
             VisualPreset::GreyscaleInvert => Ok(greyscale_invert_effect()),
             VisualPreset::WarmDim => {
                 bail!("Warm Dim is not implemented in the native Windows path right now.")
@@ -958,7 +958,7 @@ mod platform {
 
     fn preset_label(preset: Option<VisualPreset>) -> &'static str {
         match preset.unwrap_or(VisualPreset::GreyscaleInvert) {
-            VisualPreset::Darken => "Darken",
+            VisualPreset::Dark => "Dark",
             VisualPreset::WarmDim => "Warm Dim",
             VisualPreset::GreyscaleInvert => "Greyscale Invert",
         }

@@ -26,6 +26,9 @@ PNG_SIZES = {
     "Square310x310Logo.png": 310,
     "StoreLogo.png": 50,
 }
+TRAY_PNG_SIZES = {
+    "tray-icon.png": 64,
+}
 
 ICO_SIZES = [(16, 16), (20, 20), (24, 24), (32, 32), (40, 40), (48, 48), (64, 64), (128, 128), (256, 256)]
 
@@ -34,14 +37,17 @@ def main() -> None:
     ICON_DIR.mkdir(parents=True, exist_ok=True)
 
     for filename, size in PNG_SIZES.items():
-        render_icon(size).save(ICON_DIR / filename, format="PNG")
+        render_app_icon(size).save(ICON_DIR / filename, format="PNG")
 
-    icon_1024 = render_icon(1024)
+    for filename, size in TRAY_PNG_SIZES.items():
+        render_tray_icon(size).save(ICON_DIR / filename, format="PNG")
+
+    icon_1024 = render_app_icon(1024)
     icon_1024.save(ICON_DIR / "icon.icns", format="ICNS")
     icon_1024.save(ICON_DIR / "icon.ico", format="ICO", sizes=ICO_SIZES)
 
 
-def render_icon(size: int) -> Image.Image:
+def render_app_icon(size: int) -> Image.Image:
     scale = 4
     canvas_size = size * scale
     canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
@@ -67,6 +73,33 @@ def render_icon(size: int) -> Image.Image:
     draw.ellipse(sun_box, fill=amber)
     draw.ellipse(moon_box, fill=slate)
     draw.rounded_rectangle(slit_box, radius=round(canvas_size * 0.03), fill=ash)
+
+    return canvas.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def render_tray_icon(size: int) -> Image.Image:
+    scale = 8
+    canvas_size = size * scale
+    canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    amber = (216, 143, 61, 255)
+
+    crescent_box = inset_box(canvas_size, 0.18)
+    bite_box = shift_box(inset_box(canvas_size, 0.19), canvas_size * 0.18, 0)
+    dot_radius = round(canvas_size * 0.08)
+    dot_center_x = round(canvas_size * 0.34)
+    dot_center_y = round(canvas_size * 0.68)
+    dot_box = (
+        dot_center_x - dot_radius,
+        dot_center_y - dot_radius,
+        dot_center_x + dot_radius,
+        dot_center_y + dot_radius,
+    )
+
+    draw.ellipse(crescent_box, fill=amber)
+    draw.ellipse(bite_box, fill=(0, 0, 0, 0))
+    draw.ellipse(dot_box, fill=amber)
 
     return canvas.resize((size, size), Image.Resampling.LANCZOS)
 
