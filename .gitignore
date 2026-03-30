@@ -3,6 +3,7 @@ node_modules/
 .cache/
 .cargo-home/
 .venv/
+.venv-icons/
 coverage/
 playwright-report/
 test-results/

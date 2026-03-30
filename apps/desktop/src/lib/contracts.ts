@@ -3,7 +3,7 @@ export type EffectFamily = "tint" | "transform";
 export type VisualPreset = "darken" | "warmDim" | "greyscaleInvert";
 export type CapabilityStatus = "available" | "experimental" | "planned" | "unsupported";
 export type RuntimeEventLevel = "trace" | "debug" | "info" | "warn" | "error";
-export type LensStatus = "detached" | "attached" | "suspended";
+export type LensStatus = "detached" | "pending" | "attached" | "suspended";
 export type WindowAttachmentState = "available" | "minimized";
 
 export interface PresetDefinition {

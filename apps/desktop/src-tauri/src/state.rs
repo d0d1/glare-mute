@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use glare_mute_core::{
     APP_NAME, AppSettings, AppSnapshot, LOG_FILE_NAME, PlatformSummary, RECENT_EVENT_LIMIT,
     RuntimeDiagnostics, RuntimeEvent, RuntimeEventLevel, SETTINGS_FILE_NAME, ThemePreference,
-    WindowAttachmentState, default_preset_catalog,
+    default_preset_catalog,
 };
 use tauri::{AppHandle, Manager};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -115,25 +115,7 @@ impl ManagedState {
     }
 
     pub fn refresh_window_candidates(&self) -> Result<AppSnapshot> {
-        let snapshot = self.snapshot()?;
-        let available_count = snapshot
-            .window_candidates
-            .iter()
-            .filter(|entry| entry.attachment_state == WindowAttachmentState::Available)
-            .count();
-        let minimized_count = snapshot
-            .window_candidates
-            .len()
-            .saturating_sub(available_count);
-        self.record_event(
-            RuntimeEventLevel::Debug,
-            "picker".to_string(),
-            format!(
-                "window list refreshed ({} available, {} minimized)",
-                available_count, minimized_count
-            ),
-        );
-        Ok(snapshot)
+        self.snapshot()
     }
 
     pub fn attach_window(
@@ -150,7 +132,7 @@ impl ManagedState {
         self.record_event(
             RuntimeEventLevel::Info,
             "lens".to_string(),
-            format!("attached {:?} to {}", preset, target),
+            format!("applied {:?} to {}", preset, target),
         );
 
         self.snapshot()
@@ -158,10 +140,14 @@ impl ManagedState {
 
     pub fn detach_lens(&self) -> Result<AppSnapshot> {
         self.lens.detach()?;
+        {
+            let mut diagnostics = self.diagnostics.lock().expect("diagnostics lock poisoned");
+            diagnostics.suspended = false;
+        }
         self.record_event(
             RuntimeEventLevel::Info,
             "lens".to_string(),
-            "detached active lens target".to_string(),
+            "turned off the current effect".to_string(),
         );
 
         self.snapshot()

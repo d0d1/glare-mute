@@ -83,10 +83,7 @@ function createMockDesktopClient(): DesktopClient {
       if (!candidate) {
         throw new Error(`No mock window found for ${windowId}.`);
       }
-      if (candidate.attachmentState !== "available") {
-        throw new Error("Restore the selected window before attaching the lens.");
-      }
-      if (preset !== "greyscaleInvert") {
+      if (!["greyscaleInvert", "darken"].includes(preset)) {
         throw new Error(`${preset} is not available in the current build.`);
       }
 
@@ -94,17 +91,29 @@ function createMockDesktopClient(): DesktopClient {
         activePreset: preset,
         activeTarget: candidate,
         backendLabel: "Mock transform backend",
-        status: snapshot.diagnostics.suspended ? "suspended" : "attached",
-        summary:
-          preset === "greyscaleInvert"
-            ? `Mock lens attached to ${candidate.title}.`
-            : `${preset} is not wired in the browser preview.`,
+        status: snapshot.diagnostics.suspended
+          ? "suspended"
+          : candidate.attachmentState === "minimized"
+            ? "pending"
+            : "attached",
+        summary: mockLensSummary(
+          preset,
+          candidate.title,
+          snapshot.diagnostics.suspended
+            ? "suspended"
+            : candidate.attachmentState === "minimized"
+              ? "pending"
+              : "attached"
+        ),
       };
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "info",
         source: "mock-runtime",
-        message: `attached ${preset} to ${candidate.title}`,
+        message:
+          candidate.attachmentState === "minimized"
+            ? `applied ${preset} to ${candidate.title}; it will appear once the window is back on screen`
+            : `applied ${preset} to ${candidate.title}`,
       });
       writeSnapshot(snapshot);
       return snapshot;
@@ -140,16 +149,15 @@ function createMockDesktopClient(): DesktopClient {
         activePreset: null,
         activeTarget: null,
         backendLabel: "Mock transform backend",
-        status: snapshot.diagnostics.suspended ? "suspended" : "detached",
-        summary: snapshot.diagnostics.suspended
-          ? "Lens suspended with no active target."
-          : "No native window is attached in the browser preview.",
+        status: "detached",
+        summary: "No effect is active in the browser preview.",
       };
+      snapshot.diagnostics.suspended = false;
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "info",
         source: "mock-runtime",
-        message: "lens detached from mock target",
+        message: "turned off the current mock effect",
       });
       writeSnapshot(snapshot);
       return snapshot;
@@ -170,16 +178,22 @@ function createMockDesktopClient(): DesktopClient {
     async refreshWindowCandidates() {
       const snapshot = readSnapshot();
       snapshot.windowCandidates = defaultWindowCandidates();
-      const availableCount = snapshot.windowCandidates.filter(
-        (entry) => entry.attachmentState === "available"
-      ).length;
-      const minimizedCount = snapshot.windowCandidates.length - availableCount;
-      snapshot.diagnostics.recentEvents.unshift({
-        timestamp: new Date().toISOString(),
-        level: "debug",
-        source: "mock-runtime",
-        message: `refreshed mock window list (${availableCount} available, ${minimizedCount} minimized)`,
-      });
+      if (snapshot.lens.activeTarget) {
+        const nextTarget =
+          snapshot.windowCandidates.find(
+            (entry) => entry.windowId === snapshot.lens.activeTarget?.windowId
+          ) ?? null;
+        snapshot.lens.activeTarget = nextTarget;
+        if (!snapshot.diagnostics.suspended && nextTarget) {
+          snapshot.lens.status =
+            nextTarget.attachmentState === "minimized" ? "pending" : "attached";
+          snapshot.lens.summary = mockLensSummary(
+            snapshot.lens.activePreset ?? "greyscaleInvert",
+            nextTarget.title,
+            snapshot.lens.status
+          );
+        }
+      }
       writeSnapshot(snapshot);
       return snapshot;
     },
@@ -202,17 +216,21 @@ function createMockDesktopClient(): DesktopClient {
         snapshot.diagnostics.suspended && snapshot.lens.activeTarget
           ? "suspended"
           : snapshot.lens.activeTarget
-            ? "attached"
+            ? snapshot.lens.activeTarget.attachmentState === "minimized"
+              ? "pending"
+              : "attached"
             : snapshot.diagnostics.suspended
               ? "suspended"
               : "detached";
-      snapshot.lens.summary = snapshot.diagnostics.suspended
-        ? snapshot.lens.activeTarget
-          ? `Lens suspended while ${snapshot.lens.activeTarget.title} remains attached.`
-          : "Lens output suspended."
-        : snapshot.lens.activeTarget
-          ? `Mock lens attached to ${snapshot.lens.activeTarget.title}.`
-          : "No native window is attached in the browser preview.";
+      snapshot.lens.summary = snapshot.lens.activeTarget
+        ? mockLensSummary(
+            snapshot.lens.activePreset ?? "greyscaleInvert",
+            snapshot.lens.activeTarget.title,
+            snapshot.lens.status
+          )
+        : snapshot.diagnostics.suspended
+          ? "The current effect is paused."
+          : "No effect is active in the browser preview.";
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "info",
@@ -247,12 +265,17 @@ function defaultSnapshot(): AppSnapshot {
     devMode: import.meta.env.DEV,
     settings: {
       themePreference: "system",
-      panicHotkey: "Ctrl+Shift+Pause",
+      panicHotkey: "Ctrl+Shift+F8",
       suspendOnStartup: false,
       profiles: [],
     },
     presets: [
-      preset("darken", "Darken", "tint", "A neutral dim layer that keeps text crisp."),
+      preset(
+        "darken",
+        "Darken",
+        "transform",
+        "A cooler dark treatment inspired by Windows dark surfaces."
+      ),
       preset("warmDim", "Warm Dim", "tint", "An amber-forward dim preset tuned for glare."),
       preset(
         "greyscaleInvert",
@@ -278,7 +301,7 @@ function defaultSnapshot(): AppSnapshot {
           "windowPicker",
           "Window picker",
           "experimental",
-          "Browser preview simulates native window attachment with ready-now and restore-first window states."
+          "Browser preview simulates a live unified window list, including minimized windows that can be armed before restore."
         ),
         capability(
           "tintBackend",
@@ -290,7 +313,7 @@ function defaultSnapshot(): AppSnapshot {
           "magnificationBackend",
           "Magnification transform",
           "available",
-          "Mock preview keeps Greyscale Invert in the shared contract while native validation happens on Windows."
+          "Mock preview keeps Darken and Greyscale Invert in the shared contract while native validation happens on Windows."
         ),
         capability(
           "captureBackend",
@@ -311,7 +334,7 @@ function defaultSnapshot(): AppSnapshot {
       activeTarget: null,
       backendLabel: "Mock transform backend",
       status: "detached",
-      summary: "No native window is attached in the browser preview.",
+      summary: "No effect is active in the browser preview.",
     },
     windowCandidates: defaultWindowCandidates(),
   };
@@ -333,6 +356,26 @@ function preset(
   summary: string
 ) {
   return { id, label, family, summary };
+}
+
+function mockLensSummary(
+  preset: VisualPreset,
+  title: string,
+  status: AppSnapshot["lens"]["status"]
+) {
+  const label =
+    preset === "darken" ? "Darken" : preset === "warmDim" ? "Warm Dim" : "Greyscale Invert";
+
+  switch (status) {
+    case "pending":
+      return `${label} will appear when ${title} is back on screen.`;
+    case "attached":
+      return `${label} is active on ${title}.`;
+    case "suspended":
+      return `${label} is paused for ${title}.`;
+    case "detached":
+      return "No effect is active in the browser preview.";
+  }
 }
 
 function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {

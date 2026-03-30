@@ -88,7 +88,7 @@ mod windows {
                     "windowPicker",
                     "Window picker",
                     CapabilityStatus::Available,
-                    "The Windows shell can enumerate top-level app windows and keep minimized windows visible as restore-first entries.",
+                    "The Windows shell can keep a live list of top-level app windows, including minimized ones that can be armed before restore.",
                 ),
                 capability(
                     "tintBackend",
@@ -100,7 +100,7 @@ mod windows {
                     "magnificationBackend",
                     "Magnification transform",
                     CapabilityStatus::Available,
-                    "Greyscale Invert runs through the Magnification API for the first Windows test slice.",
+                    "Darken and Greyscale Invert run through the Magnification API for the Windows shell.",
                 ),
                 capability(
                     "captureBackend",

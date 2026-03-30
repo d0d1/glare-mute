@@ -4,9 +4,9 @@ GlareMute is an open-source Windows accessibility lens for bright legacy apps th
 
 The first native test slice is intentionally narrow:
 
-- enumerate top-level Windows app windows, including minimized restore-first entries
-- attach `Greyscale Invert` to one selected main window
-- suspend or detach the lens quickly from the app window or tray
+- keep a live, stable list of top-level Windows app windows, including minimized ones
+- apply either `Greyscale Invert` or `Darken` to one selected main window
+- pause or turn off the effect quickly from the app window or tray
 
 The repository is intentionally shaped for agent-driven development:
 
@@ -15,6 +15,7 @@ The repository is intentionally shaped for agent-driven development:
 - first-class diagnostics in dev builds and on disk
 - screenshot-backed browser review against a deterministic preview server
 - local installs only, with repo-managed tooling wherever possible
+- icon generation scripted through a repo-local Python venv
 
 ## Project rules
 
@@ -44,6 +45,14 @@ cmd.exe /c "cd /d C:\Users\dbhul\code\glare-mute && set TAURI_DEV_HOST=127.0.0.1
 ```
 
 That path avoids the Tauri CLI optional-binary issues that show up when the repo dependencies were installed from WSL.
+
+To regenerate the app and tray icon assets:
+
+```bash
+python3 -m venv .venv-icons
+.venv-icons/bin/pip install pillow
+.venv-icons/bin/python scripts/generate_icons.py
+```
 
 ## Verification
 

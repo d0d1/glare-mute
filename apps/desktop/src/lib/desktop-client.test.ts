@@ -39,6 +39,24 @@ describe("desktopClient mock runtime", () => {
     expect(nextSnapshot.lens.status).toBe("attached");
   });
 
+  it("keeps minimized windows in the list and applies pending output until they return", async () => {
+    const snapshot = await desktopClient.bootstrapState();
+    const candidate = snapshot.windowCandidates.find(
+      (entry) => entry.attachmentState === "minimized"
+    );
+
+    expect(candidate).toBeDefined();
+    if (!candidate) {
+      throw new Error("Expected a minimized mock window.");
+    }
+
+    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "darken");
+
+    expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
+    expect(nextSnapshot.lens.activePreset).toBe("darken");
+    expect(nextSnapshot.lens.status).toBe("pending");
+  });
+
   it("refreshes the mock window list", async () => {
     await desktopClient.bootstrapState();
     const nextSnapshot = await desktopClient.refreshWindowCandidates();

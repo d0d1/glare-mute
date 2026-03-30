@@ -148,6 +148,7 @@ pub struct WindowDescriptor {
 #[serde(rename_all = "camelCase")]
 pub enum LensStatus {
     Detached,
+    Pending,
     Attached,
     Suspended,
 }
@@ -186,7 +187,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme_preference: ThemePreference::System,
-            panic_hotkey: "Ctrl+Shift+Pause".to_string(),
+            panic_hotkey: "Ctrl+Shift+F8".to_string(),
             suspend_on_startup: false,
             profiles: Vec::new(),
         }
@@ -198,8 +199,8 @@ pub fn default_preset_catalog() -> Vec<PresetDefinition> {
         PresetDefinition {
             id: VisualPreset::Darken,
             label: "Darken".to_string(),
-            family: EffectFamily::Tint,
-            summary: "A zero-lag neutral dim layer that reduces raw glare.".to_string(),
+            family: EffectFamily::Transform,
+            summary: "A cooler dark treatment inspired by Windows dark surfaces.".to_string(),
         },
         PresetDefinition {
             id: VisualPreset::WarmDim,
@@ -226,7 +227,7 @@ mod tests {
         let settings = AppSettings::default();
 
         assert_eq!(settings.theme_preference, ThemePreference::System);
-        assert_eq!(settings.panic_hotkey, "Ctrl+Shift+Pause");
+        assert_eq!(settings.panic_hotkey, "Ctrl+Shift+F8");
         assert!(settings.profiles.is_empty());
     }
 

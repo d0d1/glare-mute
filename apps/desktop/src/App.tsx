@@ -19,7 +19,7 @@ import {
   watchSystemTheme,
 } from "./lib/theme";
 
-type BusyAction = "attach" | "copy" | "detach" | "logs" | "refresh" | "suspend" | "theme" | null;
+type BusyAction = "apply" | "copy" | "logs" | "pause" | "theme" | "turnOff" | null;
 type StatusTone = CapabilityStatus | "neutral";
 
 const DEFAULT_PRESET: VisualPreset = "greyscaleInvert";
@@ -43,6 +43,7 @@ function App() {
   const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<VisualPreset>(DEFAULT_PRESET);
   const [windowQuery, setWindowQuery] = useState("");
+  const hasSnapshot = snapshot !== null;
 
   useEffect(() => watchSystemTheme(setPrefersDark), []);
 
@@ -110,12 +111,9 @@ function App() {
 
   const allWindowCandidates = snapshot?.windowCandidates ?? [];
   const filteredWindowCandidates = filterWindowCandidates(allWindowCandidates, windowQuery);
-  const availableWindowCandidates = filteredWindowCandidates.filter(
-    (candidate) => candidate.attachmentState === "available"
-  );
-  const unavailableWindowCandidates = filteredWindowCandidates.filter(
-    (candidate) => candidate.attachmentState !== "available"
-  );
+  const minimizedWindowCount = filteredWindowCandidates.filter(
+    (candidate) => candidate.attachmentState === "minimized"
+  ).length;
 
   useEffect(() => {
     if (!snapshot) {
@@ -123,12 +121,6 @@ function App() {
     }
 
     const nextCandidates = filterWindowCandidates(snapshot.windowCandidates, windowQuery);
-    const nextAvailableCandidates = nextCandidates.filter(
-      (candidate) => candidate.attachmentState === "available"
-    );
-    const nextUnavailableCandidates = nextCandidates.filter(
-      (candidate) => candidate.attachmentState !== "available"
-    );
 
     setSelectedWindowId((current) => {
       const currentWindow =
@@ -145,9 +137,30 @@ function App() {
         return activeWindowId;
       }
 
-      return nextAvailableCandidates[0]?.windowId ?? nextUnavailableCandidates[0]?.windowId ?? null;
+      return null;
     });
   }, [snapshot, windowQuery]);
+
+  useEffect(() => {
+    if (!hasSnapshot) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void desktopClient
+        .refreshWindowCandidates()
+        .then((nextSnapshot) => {
+          startTransition(() => setSnapshot(nextSnapshot));
+        })
+        .catch((error) => {
+          setErrorMessage(
+            error instanceof Error ? error.message : "Failed to refresh the window list."
+          );
+        });
+    }, 2000);
+
+    return () => window.clearInterval(interval);
+  }, [hasSnapshot]);
 
   const selectedWindow =
     allWindowCandidates.find((candidate) => candidate.windowId === selectedWindowId) ?? null;
@@ -158,12 +171,8 @@ function App() {
     ? presetCapability(snapshot.platform.capabilities, selectedPreset)
     : null;
   const selectedPresetStatus = selectedPresetCapability?.status ?? "unsupported";
-  const selectedWindowAttachable = selectedWindow?.attachmentState === "available";
   const canAttachSelectedWindow =
-    Boolean(selectedWindow) &&
-    selectedWindowAttachable &&
-    selectedPresetStatus === "available" &&
-    busyAction !== "attach";
+    Boolean(selectedWindow) && selectedPresetStatus === "available" && busyAction !== "apply";
 
   async function updateSnapshot(task: () => Promise<AppSnapshot>, busy: BusyAction) {
     setBusyAction(busy);
@@ -188,11 +197,7 @@ function App() {
   }
 
   async function handleSuspendToggle() {
-    await updateSnapshot(() => desktopClient.toggleSuspend(), "suspend");
-  }
-
-  async function handleRefreshWindows() {
-    await updateSnapshot(() => desktopClient.refreshWindowCandidates(), "refresh");
+    await updateSnapshot(() => desktopClient.toggleSuspend(), "pause");
   }
 
   async function handleAttachSelectedWindow() {
@@ -202,12 +207,12 @@ function App() {
 
     await updateSnapshot(
       () => desktopClient.attachWindow(selectedWindow.windowId, selectedPreset),
-      "attach"
+      "apply"
     );
   }
 
   async function handleDetachLens() {
-    await updateSnapshot(() => desktopClient.detachLens(), "detach");
+    await updateSnapshot(() => desktopClient.detachLens(), "turnOff");
   }
 
   async function handleOpenLogs() {
@@ -275,79 +280,57 @@ function App() {
           <section className="workflow-pane window-pane">
             <PaneHeader
               subtitle={windowListSubtitle(
-                availableWindowCandidates.length,
-                unavailableWindowCandidates.length,
+                filteredWindowCandidates.length,
+                minimizedWindowCount,
                 windowQuery
               )}
               title="Available windows"
             />
 
-            <div className="toolbar">
-              <input
-                aria-label="Filter windows"
-                className="search-input"
-                onChange={(event) => setWindowQuery(event.target.value)}
-                placeholder="Filter by title, app, or class"
-                type="search"
-                value={windowQuery}
-              />
-              <button
-                className="button button-secondary"
-                disabled={busyAction === "refresh"}
-                onClick={() => void handleRefreshWindows()}
-                type="button"
-              >
-                {busyAction === "refresh" ? "Refreshing…" : "Refresh list"}
-              </button>
-            </div>
+            <input
+              aria-label="Filter windows"
+              className="search-input"
+              onChange={(event) => setWindowQuery(event.target.value)}
+              placeholder="Filter by title or app"
+              type="search"
+              value={windowQuery}
+            />
 
             {filteredWindowCandidates.length > 0 ? (
-              <div className="window-groups">
-                {availableWindowCandidates.length > 0 ? (
-                  <WindowGroup
-                    ariaLabel="Windows ready to attach"
-                    candidates={availableWindowCandidates}
-                    heading="Ready now"
-                    onSelect={setSelectedWindowId}
-                    selectedWindowId={selectedWindowId}
-                    activeWindowId={activeTarget?.windowId ?? null}
+              <ul aria-label="Available windows" className="window-list">
+                {filteredWindowCandidates.map((candidate) => (
+                  <WindowRow
+                    candidate={candidate}
+                    key={candidate.windowId}
+                    lensStatus={
+                      activeTarget?.windowId === candidate.windowId ? snapshot.lens.status : null
+                    }
+                    onSelect={() => setSelectedWindowId(candidate.windowId)}
+                    selected={selectedWindowId === candidate.windowId}
                   />
-                ) : null}
-
-                {unavailableWindowCandidates.length > 0 ? (
-                  <WindowGroup
-                    ariaLabel="Windows that need to be restored first"
-                    candidates={unavailableWindowCandidates}
-                    heading="Restore first"
-                    onSelect={setSelectedWindowId}
-                    selectedWindowId={selectedWindowId}
-                    activeWindowId={activeTarget?.windowId ?? null}
-                  />
-                ) : null}
-              </div>
+                ))}
+              </ul>
             ) : (
               <div className="empty-state">
                 {allWindowCandidates.length === 0
-                  ? "No windows are available yet. Bring the target app to the desktop and refresh the list."
+                  ? "No windows are available yet. Bring the target app to the desktop and wait a moment."
                   : "No windows match the current filter."}
               </div>
             )}
           </section>
 
-          <section className="workflow-pane lens-pane">
-            <div className="lens-header">
-              <PaneHeader subtitle={lensMessage(snapshot)} title="Lens" />
+          <section className="workflow-pane effect-pane">
+            <div className="effect-header">
+              <PaneHeader subtitle={effectMessage(snapshot)} title="Effect" />
               <StatusChip
-                label={lensLabel(snapshot.lens.status)}
-                status={lensStatusChip(snapshot.lens.status)}
+                label={effectStatusLabel(snapshot.lens.status)}
+                status={effectStatusChip(snapshot.lens.status)}
               />
             </div>
 
-            <section className="pane-section">
-              <label className="field-label" htmlFor="effect-select">
-                Effect
-              </label>
+            <section className="pane-section effect-picker-section">
               <select
+                aria-label="Effect"
                 className="field-select"
                 id="effect-select"
                 onChange={(event) => setSelectedPreset(event.target.value as VisualPreset)}
@@ -373,23 +356,6 @@ function App() {
               ) : null}
             </section>
 
-            <section className="pane-section">
-              <dl className="detail-list">
-                <div>
-                  <dt>Selected window</dt>
-                  <dd>{selectedWindow?.title ?? "No window selected"}</dd>
-                </div>
-                <div>
-                  <dt>Attached window</dt>
-                  <dd>{activeTarget?.title ?? "No window attached"}</dd>
-                </div>
-                <div>
-                  <dt>Safety hotkey</dt>
-                  <dd>{snapshot.settings.panicHotkey}</dd>
-                </div>
-              </dl>
-            </section>
-
             <section className="pane-section action-section">
               <button
                 className="button"
@@ -397,7 +363,7 @@ function App() {
                 onClick={() => void handleAttachSelectedWindow()}
                 type="button"
               >
-                {attachButtonLabel(
+                {applyButtonLabel(
                   busyAction,
                   selectedPresetDefinition,
                   selectedPresetStatus,
@@ -405,61 +371,64 @@ function App() {
                 )}
               </button>
               <p className="body-copy action-hint">
-                {attachHint(selectedWindow, selectedPresetCapability, selectedPresetStatus)}
+                {applyHint(selectedWindow, selectedPresetCapability, selectedPresetStatus)}
               </p>
               <div className="button-row">
                 <button
                   className="button button-secondary"
-                  disabled={busyAction === "suspend"}
+                  disabled={!activeTarget || busyAction === "pause"}
                   onClick={() => void handleSuspendToggle()}
                   type="button"
                 >
-                  {busyAction === "suspend"
+                  {busyAction === "pause"
                     ? "Working…"
                     : snapshot.diagnostics.suspended
-                      ? "Resume lens"
-                      : "Suspend lens"}
+                      ? "Resume"
+                      : "Pause"}
                 </button>
                 <button
                   className="button button-secondary"
-                  disabled={!activeTarget || busyAction === "detach"}
+                  disabled={!activeTarget || busyAction === "turnOff"}
                   onClick={() => void handleDetachLens()}
                   type="button"
                 >
-                  {busyAction === "detach" ? "Detaching…" : "Detach lens"}
+                  {busyAction === "turnOff" ? "Turning off…" : "Turn off"}
                 </button>
               </div>
+              <dl className="detail-list session-details">
+                <div>
+                  <dt>Window</dt>
+                  <dd>{activeTarget?.title ?? selectedWindow?.title ?? "No window selected"}</dd>
+                </div>
+                <div>
+                  <dt>Shortcut</dt>
+                  <dd>{snapshot.settings.panicHotkey}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="pane-section selected-window-section">
+              <PaneHeader
+                subtitle="The selected window is where Apply goes."
+                title="Selected window"
+              />
+              {selectedWindow ? (
+                <SelectedWindowDetails candidate={selectedWindow} devMode={snapshot.devMode} />
+              ) : (
+                <div className="empty-state">
+                  Select a window from the list to choose where the effect should go.
+                </div>
+              )}
             </section>
           </section>
-
-          <aside className="workflow-pane details-pane">
-            <PaneHeader
-              subtitle="The current selection is what Attach uses."
-              title="Window details"
-            />
-            {selectedWindow ? (
-              <SelectedWindowDetails candidate={selectedWindow} />
-            ) : (
-              <div className="empty-state">
-                Select a window from the list to inspect it and attach the lens.
-              </div>
-            )}
-          </aside>
         </main>
 
         <details className="drawer-panel settings-panel">
           <summary>
             <span>Settings</span>
-            <span className="mono">
-              {themeSummary(snapshot.settings.themePreference, effectiveTheme)}
-            </span>
           </summary>
           <div className="drawer-body">
             <section className="drawer-section">
-              <PaneHeader
-                subtitle="GlareMute supports its own appearance modes natively, including Greyscale Invert."
-                title="Theme"
-              />
               <label className="field-label" htmlFor="theme-select">
                 Theme
               </label>
@@ -487,7 +456,6 @@ function App() {
           <details className="drawer-panel support-panel">
             <summary>
               <span>Support & diagnostics</span>
-              <span className="mono">{snapshot.platform.backendLabel}</span>
             </summary>
             <div className="drawer-body">
               <div className="support-actions">
@@ -565,116 +533,97 @@ function PaneHeader({ subtitle, title }: { subtitle: string; title: string }) {
   );
 }
 
-function WindowGroup({
-  activeWindowId,
-  ariaLabel,
-  candidates,
-  heading,
-  onSelect,
-  selectedWindowId,
-}: {
-  activeWindowId: string | null;
-  ariaLabel: string;
-  candidates: WindowDescriptor[];
-  heading: string;
-  onSelect: (windowId: string) => void;
-  selectedWindowId: string | null;
-}) {
-  return (
-    <section className="window-group">
-      <div className="group-heading">
-        <h3>{heading}</h3>
-        <span className="mono">{candidates.length}</span>
-      </div>
-      <ul aria-label={ariaLabel} className="window-list">
-        {candidates.map((candidate) => (
-          <WindowRow
-            active={activeWindowId === candidate.windowId}
-            candidate={candidate}
-            key={candidate.windowId}
-            onSelect={() => onSelect(candidate.windowId)}
-            selected={selectedWindowId === candidate.windowId}
-          />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function WindowRow({
-  active,
   candidate,
+  lensStatus,
   onSelect,
   selected,
 }: {
-  active: boolean;
   candidate: WindowDescriptor;
+  lensStatus: AppSnapshot["lens"]["status"] | null;
   onSelect: () => void;
   selected: boolean;
 }) {
   return (
-    <li
-      className="window-row"
-      data-attachable={candidate.attachmentState === "available"}
-      data-selected={selected}
-    >
-      <button aria-selected={selected} className="window-select" onClick={onSelect} type="button">
+    <li className="window-row" data-attachable={candidate.attachmentState === "available"}>
+      <button
+        aria-selected={selected}
+        className="window-select"
+        data-selected={selected}
+        onClick={onSelect}
+        type="button"
+      >
         <div className="window-title-line">
           <strong className="window-title">{candidate.title}</strong>
+          <div className="window-state">
+            {candidate.attachmentState === "minimized" ? (
+              <StatusChip label="Minimized" status="neutral" />
+            ) : null}
+            {lensStatus ? (
+              <StatusChip
+                label={windowEffectLabel(lensStatus)}
+                status={windowEffectTone(lensStatus)}
+              />
+            ) : null}
+          </div>
         </div>
-        <p className="window-subtitle">
-          {executableName(candidate.executablePath)}
-          {candidate.windowClass ? ` • ${candidate.windowClass}` : ""}
-          {candidate.attachmentState === "minimized" ? " • Restore to attach" : ""}
-        </p>
+        <p className="window-subtitle">{executableName(candidate.executablePath)}</p>
       </button>
-      <div className="window-state">
-        {candidate.attachmentState === "minimized" ? (
-          <StatusChip label="Minimized" status="neutral" />
-        ) : null}
-        {candidate.isForeground ? <StatusChip label="Foreground" status="experimental" /> : null}
-        {active ? <StatusChip label="Attached" status="available" /> : null}
-      </div>
     </li>
   );
 }
 
-function SelectedWindowDetails({ candidate }: { candidate: WindowDescriptor }) {
+function SelectedWindowDetails({
+  candidate,
+  devMode,
+}: {
+  candidate: WindowDescriptor;
+  devMode: boolean;
+}) {
   return (
-    <dl className="detail-list">
-      <div>
-        <dt>Title</dt>
-        <dd>{candidate.title}</dd>
-      </div>
-      <div>
-        <dt>State</dt>
-        <dd>{windowStateLabel(candidate)}</dd>
-      </div>
-      <div>
-        <dt>Application</dt>
-        <dd>{executableName(candidate.executablePath)}</dd>
-      </div>
-      <div>
-        <dt>Executable path</dt>
-        <dd>{candidate.executablePath ?? "Unavailable"}</dd>
-      </div>
-      <div>
-        <dt>Window class</dt>
-        <dd>{candidate.windowClass ?? "Unavailable"}</dd>
-      </div>
-      <div>
-        <dt>Bounds</dt>
-        <dd>{formatBounds(candidate)}</dd>
-      </div>
-      <div>
-        <dt>Process</dt>
-        <dd>{candidate.processId.toString()}</dd>
-      </div>
-      <div>
-        <dt>Window ID</dt>
-        <dd>{candidate.windowId}</dd>
-      </div>
-    </dl>
+    <>
+      <dl className="detail-list">
+        <div>
+          <dt>Title</dt>
+          <dd>{candidate.title}</dd>
+        </div>
+        <div>
+          <dt>State</dt>
+          <dd>{windowStateLabel(candidate)}</dd>
+        </div>
+        <div>
+          <dt>Application</dt>
+          <dd>{executableName(candidate.executablePath)}</dd>
+        </div>
+      </dl>
+      {devMode ? (
+        <details className="inline-details">
+          <summary>Advanced details</summary>
+          <dl className="detail-list advanced-detail-list">
+            <div>
+              <dt>Executable path</dt>
+              <dd>{candidate.executablePath ?? "Unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Window class</dt>
+              <dd>{candidate.windowClass ?? "Unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Bounds</dt>
+              <dd>{formatBounds(candidate)}</dd>
+            </div>
+            <div>
+              <dt>Process</dt>
+              <dd>{candidate.processId.toString()}</dd>
+            </div>
+            <div>
+              <dt>Window ID</dt>
+              <dd>{candidate.windowId}</dd>
+            </div>
+          </dl>
+        </details>
+      ) : null}
+    </>
   );
 }
 
@@ -729,6 +678,7 @@ function filterWindowCandidates(candidates: WindowDescriptor[], query: string) {
 function presetCapability(capabilities: CapabilityDescriptor[], preset: VisualPreset) {
   switch (preset) {
     case "darken":
+      return capabilityById(capabilities, "magnificationBackend");
     case "warmDim":
       return capabilityById(capabilities, "tintBackend");
     case "greyscaleInvert":
@@ -747,32 +697,28 @@ function capabilityById(capabilities: CapabilityDescriptor[], id: string): Capab
   );
 }
 
-function attachButtonLabel(
+function applyButtonLabel(
   busyAction: BusyAction,
   preset: PresetDefinition | null,
   presetStatus: CapabilityStatus,
   selectedWindow: WindowDescriptor | null
 ) {
-  if (busyAction === "attach") {
-    return "Attaching…";
+  if (busyAction === "apply") {
+    return "Applying…";
   }
 
   if (!selectedWindow) {
     return "Choose a window";
   }
 
-  if (selectedWindow.attachmentState !== "available") {
-    return "Restore window to attach";
-  }
-
   if (!preset || presetStatus !== "available") {
     return `${preset?.label ?? "Effect"} not available yet`;
   }
 
-  return `Attach ${preset.label}`;
+  return `Apply ${preset.label}`;
 }
 
-function attachHint(
+function applyHint(
   selectedWindow: WindowDescriptor | null,
   presetCapability: CapabilityDescriptor | null,
   presetStatus: CapabilityStatus
@@ -782,26 +728,26 @@ function attachHint(
   }
 
   if (selectedWindow.attachmentState === "minimized") {
-    return "Restore this window before attaching the lens.";
+    return "This window is minimized. The effect will appear when it is back on screen.";
   }
 
   if (presetStatus !== "available") {
     return presetCapability?.summary ?? "This effect is not available in the current build.";
   }
 
-  return "Ready to attach the selected effect to this window.";
+  return "Ready to apply the selected effect to this window.";
 }
 
-function windowListSubtitle(availableCount: number, unavailableCount: number, query: string) {
+function windowListSubtitle(totalCount: number, minimizedCount: number, query: string) {
   if (query.trim()) {
-    return `${availableCount} ready now, ${unavailableCount} restore first.`;
+    return `${totalCount} windows match.`;
   }
 
-  if (unavailableCount > 0) {
-    return `${availableCount} ready now. ${unavailableCount} minimized windows stay listed below.`;
+  if (minimizedCount > 0) {
+    return `${totalCount} windows shown. Minimized windows stay in the list.`;
   }
 
-  return `${availableCount} ready now.`;
+  return `${totalCount} windows shown. Updates automatically.`;
 }
 
 function executableName(path: string | null) {
@@ -816,39 +762,47 @@ function formatBounds(candidate: WindowDescriptor) {
   return `${candidate.bounds.width}x${candidate.bounds.height} at ${candidate.bounds.left}, ${candidate.bounds.top}`;
 }
 
-function lensLabel(status: AppSnapshot["lens"]["status"]) {
+function effectStatusLabel(status: AppSnapshot["lens"]["status"]) {
   switch (status) {
+    case "pending":
+      return "Pending";
     case "attached":
-      return "Attached";
+      return "Applied";
     case "suspended":
-      return "Suspended";
+      return "Paused";
     case "detached":
-      return "Detached";
+      return "Off";
   }
 }
 
-function lensMessage(snapshot: AppSnapshot) {
+function effectMessage(snapshot: AppSnapshot) {
   if (snapshot.lens.status === "attached" && snapshot.lens.activeTarget) {
-    return `Attached to ${snapshot.lens.activeTarget.title}.`;
+    return `${presetLabel(snapshot.lens.activePreset)} is active on ${snapshot.lens.activeTarget.title}.`;
+  }
+
+  if (snapshot.lens.status === "pending" && snapshot.lens.activeTarget) {
+    return `${presetLabel(snapshot.lens.activePreset)} will appear when ${snapshot.lens.activeTarget.title} is back on screen.`;
   }
 
   if (snapshot.lens.status === "suspended") {
     return snapshot.lens.activeTarget
-      ? `Paused while ${snapshot.lens.activeTarget.title} stays selected.`
-      : "Paused before any window is attached.";
+      ? `${presetLabel(snapshot.lens.activePreset)} is paused for ${snapshot.lens.activeTarget.title}.`
+      : "The current effect is paused.";
   }
 
-  return "Select a window and choose an effect to attach.";
+  return "Choose how the selected window should look.";
 }
 
-function lensStatusChip(status: AppSnapshot["lens"]["status"]): CapabilityStatus {
+function effectStatusChip(status: AppSnapshot["lens"]["status"]): StatusTone {
   switch (status) {
+    case "pending":
+      return "neutral";
     case "attached":
       return "available";
     case "suspended":
-      return "experimental";
+      return "neutral";
     case "detached":
-      return "planned";
+      return "neutral";
   }
 }
 
@@ -893,17 +847,6 @@ function themeOptionLabel(theme: ThemePreference | "light" | "dark" | "greyscale
   }
 }
 
-function themeSummary(
-  themePreference: ThemePreference,
-  effectiveTheme: "light" | "dark" | "greyscale-invert"
-) {
-  if (themePreference === "system") {
-    return `Theme: System (${themeOptionLabel(effectiveTheme)})`;
-  }
-
-  return `Theme: ${themeOptionLabel(themePreference)}`;
-}
-
 function themeDescription(
   themePreference: ThemePreference,
   effectiveTheme: "light" | "dark" | "greyscale-invert"
@@ -913,7 +856,7 @@ function themeDescription(
   }
 
   if (themePreference === "greyscaleInvert") {
-    return "Greyscale Invert is the native in-app version of the current transform effect.";
+    return "Use GlareMute's internal greyscale inverted appearance.";
   }
 
   return `Use the ${themeOptionLabel(themePreference)} appearance for GlareMute itself.`;
@@ -922,9 +865,9 @@ function themeDescription(
 function windowStateLabel(candidate: WindowDescriptor) {
   switch (candidate.attachmentState) {
     case "available":
-      return "Ready to attach";
+      return "Ready";
     case "minimized":
-      return "Minimized; restore before attaching";
+      return "Minimized; the effect appears once it is back on screen";
   }
 }
 
@@ -935,6 +878,44 @@ function statusTone(status: CapabilityStatus): StatusTone {
     case "planned":
     case "unsupported":
       return status;
+  }
+}
+
+function presetLabel(preset: VisualPreset | null) {
+  switch (preset) {
+    case "darken":
+      return "Darken";
+    case "warmDim":
+      return "Warm Dim";
+    case "greyscaleInvert":
+      return "Greyscale Invert";
+    case null:
+      return "The selected effect";
+  }
+}
+
+function windowEffectLabel(status: AppSnapshot["lens"]["status"]) {
+  switch (status) {
+    case "pending":
+      return "Pending";
+    case "attached":
+      return "Applied";
+    case "suspended":
+      return "Paused";
+    case "detached":
+      return "Off";
+  }
+}
+
+function windowEffectTone(status: AppSnapshot["lens"]["status"]): StatusTone {
+  switch (status) {
+    case "attached":
+      return "available";
+    case "pending":
+    case "suspended":
+      return "neutral";
+    case "detached":
+      return "neutral";
   }
 }
 

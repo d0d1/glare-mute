@@ -4,10 +4,10 @@ This is the current native test path for GlareMute.
 
 ## What the first native slice does
 
-- lists top-level application windows, including minimized restore-first entries
-- lets the user choose an effect and attach `Greyscale Invert` to one selected window
+- keeps a live, stable list of top-level application windows, including minimized ones
+- lets the user choose an effect and apply either `Greyscale Invert` or `Darken` to one selected window
 - tracks that main window while it stays visible and in the active focus family
-- lets the user suspend or detach the lens from the app window or tray
+- lets the user pause or turn off the effect from the app window or tray
 
 ## Start the web frontend
 
@@ -37,21 +37,21 @@ The desktop shell uses the live frontend from the dev server and writes logs to:
 
 1. Launch the IRPF desktop app and make sure its main window is visible.
 2. Bring `GlareMute` to the foreground.
-3. In `Available windows`, click `Refresh list`.
-4. Select the IRPF window from the `Ready now` group.
-5. In `Lens`, confirm `Greyscale Invert` is selected.
-6. Click `Attach Greyscale Invert`.
-7. If the IRPF window is minimized, restore it before attaching.
-8. Use `Suspend lens` if you need an immediate off switch without losing the selected target.
-9. Use `Detach lens` if you want to drop the attachment entirely.
+3. In `Available windows`, select the IRPF window from the live list.
+4. In `Effect`, confirm `Greyscale Invert` is selected.
+5. Click `Apply Greyscale Invert`.
+6. If the IRPF window is minimized, leave it selected and apply the effect anyway. The effect will appear once the window is back on screen.
+7. Use `Pause` if you need an immediate off switch without losing the selected target.
+8. Use `Turn off` if you want to clear the effect entirely.
+9. If `Greyscale Invert` is too harsh, try `Darken` for a cooler Windows-dark-inspired treatment.
 10. Open `Settings` if you need to change GlareMute's own theme.
 11. Open `Support & diagnostics` only in dev builds if you need logs or a debug report.
 
 ## Known limits of this slice
 
-- only `Greyscale Invert` is wired natively right now
+- only `Greyscale Invert` and `Darken` are wired natively right now
 - the picker is a window list, not a crosshair picker
-- minimized windows are listed for context but still cannot be attached until restored
+- minimized windows can be selected and applied, but nothing is visible until the window is back on screen
 - popup coverage is not implemented yet
 - the overlay hides when the target is not the active focus family
 - this path is Windows-only

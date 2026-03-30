@@ -55,7 +55,7 @@ mod platform {
                     },
                     active_preset: None,
                     active_target: None,
-                    summary: "Native window attachment only runs in the Windows desktop shell."
+                    summary: "Native window effects only run in the Windows desktop shell."
                         .to_string(),
                     backend_label: "Preview backend".to_string(),
                 }),
@@ -67,7 +67,7 @@ mod platform {
             _window_id: &str,
             _preset: VisualPreset,
         ) -> Result<LensSnapshot> {
-            bail!("Native window attachment only runs in the Windows desktop shell.")
+            bail!("Native window effects only run in the Windows desktop shell.")
         }
 
         pub fn detach(&self) -> Result<LensSnapshot> {
@@ -161,10 +161,9 @@ mod platform {
                 active_preset: None,
                 active_target: None,
                 summary: if initially_suspended {
-                    "Lens output is suspended before any window is attached.".to_string()
+                    "The current effect is paused.".to_string()
                 } else {
-                    "No window is attached. Refresh the window list and attach Greyscale Invert."
-                        .to_string()
+                    "No effect is active.".to_string()
                 },
                 backend_label: "Windows Magnification backend".to_string(),
             }));
@@ -188,15 +187,12 @@ mod platform {
         }
 
         pub fn attach_window(&self, window_id: &str, preset: VisualPreset) -> Result<LensSnapshot> {
-            if preset != VisualPreset::GreyscaleInvert {
-                bail!("Only Greyscale Invert is implemented in the native Windows path right now.")
+            if !matches!(preset, VisualPreset::GreyscaleInvert | VisualPreset::Darken) {
+                bail!("This effect is not implemented in the native Windows path right now.")
             }
 
             let descriptor = describe_window(parse_window_id(window_id)?)?
                 .ok_or_else(|| anyhow!("The selected window is no longer available."))?;
-            if descriptor.attachment_state != WindowAttachmentState::Available {
-                bail!("Restore the selected window before attaching the lens.")
-            }
             let (response_tx, response_rx) = mpsc::channel();
 
             self.command_tx
@@ -457,15 +453,23 @@ mod platform {
             self.current_target_hwnd = Some(target_hwnd);
             self.current_preset = Some(preset);
 
-            let mut effect = greyscale_invert_effect();
+            let mut effect = effect_for_preset(preset)?;
             unsafe {
                 ensure_bool(
                     MagSetColorEffect(self.magnifier_hwnd, &mut effect),
-                    "failed to apply the greyscale invert color effect",
+                    "failed to apply the selected color effect",
                 )?;
             }
 
-            self.update_shared_snapshot(LensStatus::Attached, Some(descriptor), Some(preset));
+            self.update_shared_snapshot(
+                if descriptor.attachment_state == WindowAttachmentState::Minimized {
+                    LensStatus::Pending
+                } else {
+                    LensStatus::Attached
+                },
+                Some(descriptor),
+                Some(preset),
+            );
             self.tick();
             Ok(())
         }
@@ -479,15 +483,7 @@ mod platform {
                 let _ = ShowWindow(self.host_hwnd, SW_HIDE);
             }
 
-            self.update_shared_snapshot(
-                if self.suspended {
-                    LensStatus::Suspended
-                } else {
-                    LensStatus::Detached
-                },
-                None,
-                None,
-            );
+            self.update_shared_snapshot(LensStatus::Detached, None, None);
             tracing::info!("detached magnifier backend");
             Ok(())
         }
@@ -500,17 +496,19 @@ mod platform {
                 }
             }
 
-            self.update_shared_snapshot(
-                if suspended {
-                    LensStatus::Suspended
-                } else if self.current_target.is_some() {
-                    LensStatus::Attached
+            let status = if suspended {
+                LensStatus::Suspended
+            } else if let Some(target) = self.current_target.as_ref() {
+                if target.attachment_state == WindowAttachmentState::Minimized {
+                    LensStatus::Pending
                 } else {
-                    LensStatus::Detached
-                },
-                self.current_target.clone(),
-                self.current_preset,
-            );
+                    LensStatus::Attached
+                }
+            } else {
+                LensStatus::Detached
+            };
+
+            self.update_shared_snapshot(status, self.current_target.clone(), self.current_preset);
             tracing::info!(suspended, "updated lens suspended state");
             Ok(())
         }
@@ -521,6 +519,39 @@ mod platform {
             };
 
             if self.suspended {
+                unsafe {
+                    let _ = ShowWindow(self.host_hwnd, SW_HIDE);
+                }
+                return;
+            }
+
+            let descriptor = match describe_window(target_hwnd) {
+                Ok(Some(descriptor)) => descriptor,
+                Ok(None) => {
+                    tracing::warn!("target window became unavailable");
+                    let _ = self.detach();
+                    return;
+                }
+                Err(error) => {
+                    tracing::warn!(?error, "target window became unavailable");
+                    let _ = self.detach();
+                    return;
+                }
+            };
+
+            let target_changed = self.current_target.as_ref() != Some(&descriptor);
+            self.current_target = Some(descriptor.clone());
+            let status = if descriptor.attachment_state == WindowAttachmentState::Minimized {
+                LensStatus::Pending
+            } else {
+                LensStatus::Attached
+            };
+
+            if target_changed || self.snapshot_status() != status {
+                self.update_shared_snapshot(status, Some(descriptor.clone()), self.current_preset);
+            }
+
+            if descriptor.attachment_state == WindowAttachmentState::Minimized {
                 unsafe {
                     let _ = ShowWindow(self.host_hwnd, SW_HIDE);
                 }
@@ -541,6 +572,13 @@ mod platform {
                     let _ = self.detach();
                 }
             }
+        }
+
+        fn snapshot_status(&self) -> LensStatus {
+            self.shared_snapshot
+                .lock()
+                .expect("lens snapshot lock poisoned")
+                .status
         }
 
         fn present_target(&mut self, rect: RECT) -> Result<()> {
@@ -603,25 +641,33 @@ mod platform {
             active_preset: Option<VisualPreset>,
         ) {
             let summary = match status {
-                LensStatus::Detached => {
-                    "No window is attached. Refresh the window list and attach Greyscale Invert."
-                        .to_string()
+                LensStatus::Detached => "No effect is active.".to_string(),
+                LensStatus::Pending => {
+                    let target = active_target
+                        .as_ref()
+                        .map(|entry| entry.title.as_str())
+                        .unwrap_or("the selected window");
+                    format!(
+                        "{} will appear when {target} is back on screen.",
+                        preset_label(active_preset)
+                    )
                 }
                 LensStatus::Attached => {
                     let target = active_target
                         .as_ref()
                         .map(|entry| entry.title.as_str())
                         .unwrap_or("the selected window");
-                    format!("Greyscale Invert is attached to {target}.")
+                    format!("{} is active on {target}.", preset_label(active_preset))
                 }
                 LensStatus::Suspended => {
                     if let Some(target) = active_target.as_ref() {
                         format!(
-                            "Lens output is suspended while {} remains selected.",
+                            "{} is paused for {}.",
+                            preset_label(active_preset),
                             target.title
                         )
                     } else {
-                        "Lens output is suspended before any window is attached.".to_string()
+                        "The current effect is paused.".to_string()
                     }
                 }
             };
@@ -648,10 +694,8 @@ mod platform {
         }
 
         windows.sort_by(|left: &WindowDescriptor, right: &WindowDescriptor| {
-            left.attachment_state
-                .cmp(&right.attachment_state)
-                .then_with(|| right.is_foreground.cmp(&left.is_foreground))
-                .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+            window_sort_key(left)
+                .cmp(&window_sort_key(right))
                 .then_with(|| left.window_id.cmp(&right.window_id))
         });
         let available_count = windows
@@ -891,6 +935,49 @@ mod platform {
                 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0,
             ],
         }
+    }
+
+    fn darken_effect() -> MAGCOLOREFFECT {
+        MAGCOLOREFFECT {
+            transform: [
+                -0.17, -0.31, -0.08, 0.0, 0.0, -0.18, -0.36, -0.10, 0.0, 0.0, -0.20, -0.38, -0.12,
+                0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.94, 0.96, 0.98, 0.0, 1.0,
+            ],
+        }
+    }
+
+    fn effect_for_preset(preset: VisualPreset) -> Result<MAGCOLOREFFECT> {
+        match preset {
+            VisualPreset::Darken => Ok(darken_effect()),
+            VisualPreset::GreyscaleInvert => Ok(greyscale_invert_effect()),
+            VisualPreset::WarmDim => {
+                bail!("Warm Dim is not implemented in the native Windows path right now.")
+            }
+        }
+    }
+
+    fn preset_label(preset: Option<VisualPreset>) -> &'static str {
+        match preset.unwrap_or(VisualPreset::GreyscaleInvert) {
+            VisualPreset::Darken => "Darken",
+            VisualPreset::WarmDim => "Warm Dim",
+            VisualPreset::GreyscaleInvert => "Greyscale Invert",
+        }
+    }
+
+    fn window_sort_key(descriptor: &WindowDescriptor) -> (String, String, String) {
+        (
+            descriptor.title.to_lowercase(),
+            descriptor
+                .executable_path
+                .as_deref()
+                .unwrap_or("")
+                .to_lowercase(),
+            descriptor
+                .window_class
+                .as_deref()
+                .unwrap_or("")
+                .to_lowercase(),
+        )
     }
 
     fn ensure_bool(result: BOOL, context: &str) -> Result<()> {

@@ -35,6 +35,19 @@ This direct `cargo run` path is intentional for this repo layout. It avoids Taur
 
 - JavaScript tooling is installed locally through `pnpm`
 - Playwright browsers live under `.cache/ms-playwright`
-- Python tooling should go in `.venv` if added later
+- Python tooling should go in a repo-local venv
+- icon generation uses `.venv-icons` plus `scripts/generate_icons.py`
 - avoid global installs unless a tool genuinely cannot be used locally
 - the desktop package scripts call local `node_modules` entrypoints directly to avoid `.cmd` shim drift between WSL and Windows
+
+## Icon workflow
+
+Regenerate the app and tray icons from the scripted source when the product mark changes:
+
+```bash
+python3 -m venv .venv-icons
+.venv-icons/bin/pip install pillow
+.venv-icons/bin/python scripts/generate_icons.py
+```
+
+This updates the Tauri bundle assets under `apps/desktop/src-tauri/icons`.

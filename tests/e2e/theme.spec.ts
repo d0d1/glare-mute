@@ -8,6 +8,8 @@ test.describe("GlareMute product shell", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "GlareMute" })).toBeVisible();
     await expect(page.getByText("Available windows")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose a window", exact: true })).toBeDisabled();
+    await expect(page.getByText(/^Support & diagnostics$/)).toHaveCount(0);
     await expect(page.getByText(/^Appearance$/)).toHaveCount(0);
     await expect(page.getByText(/^Visible windows$/)).toHaveCount(0);
     await expect(page.locator(".app-frame")).toHaveScreenshot("dashboard-dark.png", {

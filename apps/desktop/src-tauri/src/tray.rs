@@ -17,11 +17,11 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
     let suspend = MenuItem::with_id(
         app,
         MENU_TOGGLE_SUSPEND,
-        "Toggle suspend",
+        "Pause or resume",
         true,
         None::<&str>,
     )?;
-    let detach = MenuItem::with_id(app, MENU_DETACH_LENS, "Detach lens", true, None::<&str>)?;
+    let detach = MenuItem::with_id(app, MENU_DETACH_LENS, "Turn off effect", true, None::<&str>)?;
     let open_logs = MenuItem::with_id(
         app,
         MENU_OPEN_LOGS,
@@ -36,7 +36,7 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
         &[&open, &suspend, &detach, &open_logs, &separator, &quit],
     )?;
 
-    TrayIconBuilder::with_id(TRAY_ID)
+    let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .tooltip("GlareMute")
         .show_menu_on_left_click(false)
@@ -50,8 +50,13 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
             {
                 let _ = toggle_main_window(tray.app_handle());
             }
-        })
-        .build(app)?;
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+
+    tray.build(app)?;
 
     Ok(())
 }
@@ -93,7 +98,7 @@ fn handle_menu_event(app: &AppHandle, event_id: &str) {
                         glare_mute_core::RuntimeEventLevel::Debug,
                         "tray".to_string(),
                         format!(
-                            "tray toggled suspended state to {}",
+                            "tray toggled paused state to {}",
                             snapshot.diagnostics.suspended
                         ),
                     );
@@ -102,7 +107,7 @@ fn handle_menu_event(app: &AppHandle, event_id: &str) {
                     state.record_event(
                         glare_mute_core::RuntimeEventLevel::Error,
                         "tray".to_string(),
-                        format!("tray failed to toggle suspended state: {error}"),
+                        format!("tray failed to toggle paused state: {error}"),
                     );
                 }
             }
@@ -115,7 +120,7 @@ fn handle_menu_event(app: &AppHandle, event_id: &str) {
                         glare_mute_core::RuntimeEventLevel::Debug,
                         "tray".to_string(),
                         format!(
-                            "tray detached lens; active target now {:?}",
+                            "tray turned off the current effect; active target now {:?}",
                             snapshot
                                 .lens
                                 .active_target
@@ -128,7 +133,7 @@ fn handle_menu_event(app: &AppHandle, event_id: &str) {
                     state.record_event(
                         glare_mute_core::RuntimeEventLevel::Error,
                         "tray".to_string(),
-                        format!("tray failed to detach lens: {error}"),
+                        format!("tray failed to turn off the current effect: {error}"),
                     );
                 }
             }
