@@ -1,0 +1,31 @@
+[package]
+name = "glare-mute-desktop"
+version.workspace = true
+description = "Open-source per-window accessibility lens for painful Windows apps."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "glare_mute_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+glare-mute-core = { path = "../../../crates/glare-mute-core" }
+glare-mute-platform = { path = "../../../crates/glare-mute-platform" }
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-opener.workspace = true
+tauri-plugin-single-instance.workspace = true
+time.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true

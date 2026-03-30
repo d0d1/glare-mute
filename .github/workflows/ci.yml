@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  web-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.21.1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend and docs
+        run: pnpm lint:js
+
+      - name: Build browser preview
+        run: pnpm build:web
+
+      - name: Run unit tests
+        run: pnpm test:unit
+
+      - name: Install Playwright browser
+        run: pnpm playwright:install
+
+      - name: Run Playwright review
+        run: pnpm test:e2e
+
+  rust-quality:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.1
+          components: rustfmt, clippy
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test shared crates
+        run: cargo test -p glare-mute-core -p glare-mute-platform
+
+      - name: Check desktop shell
+        run: cargo check -p glare-mute-desktop

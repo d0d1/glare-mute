@@ -1,0 +1,41 @@
+{
+  "name": "glare-mute-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.21.1",
+    "pnpm": ">=10.32.1"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "dev": "pnpm --filter @glaremute/desktop tauri:dev",
+    "dev:web": "pnpm --filter @glaremute/desktop dev:web",
+    "build": "pnpm lint && pnpm test && pnpm --filter @glaremute/desktop tauri:build",
+    "build:web": "pnpm --filter @glaremute/desktop build:web",
+    "lint": "pnpm lint:js && pnpm lint:rust",
+    "lint:js": "pnpm exec biome check .",
+    "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "pnpm exec biome check . --write && cargo fmt --all",
+    "test": "pnpm test:unit && pnpm test:e2e && pnpm test:rust",
+    "test:unit": "pnpm --filter @glaremute/desktop test",
+    "test:e2e": "node ./scripts/playwright.mjs test",
+    "test:rust": "cargo test --workspace",
+    "check": "pnpm lint && pnpm test && cargo check --workspace",
+    "playwright:install": "node ./scripts/playwright.mjs install",
+    "agent:doctor": "node ./scripts/agent-doctor.mjs",
+    "agent:ui-review": "pnpm build:web && pnpm test:e2e",
+    "commitlint": "commitlint --edit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@playwright/test": "^1.54.1",
+    "husky": "^9.1.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild"]
+  }
+}
