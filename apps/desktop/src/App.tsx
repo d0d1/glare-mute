@@ -3,9 +3,12 @@ import { startTransition, useEffect, useState } from "react";
 import "./App.css";
 import type {
   AppSnapshot,
+  CapabilityDescriptor,
   CapabilityStatus,
+  PresetDefinition,
   RuntimeEvent,
   ThemePreference,
+  VisualPreset,
   WindowDescriptor,
 } from "./lib/contracts";
 import { desktopClient } from "./lib/desktop-client";
@@ -17,11 +20,18 @@ import {
 } from "./lib/theme";
 
 type BusyAction = "attach" | "copy" | "detach" | "logs" | "refresh" | "suspend" | "theme" | null;
+type StatusTone = CapabilityStatus | "neutral";
 
+const DEFAULT_PRESET: VisualPreset = "greyscaleInvert";
 const THEME_OPTIONS: Array<{ hint: string; label: string; value: ThemePreference }> = [
   { hint: "Follow the operating system theme.", label: "System", value: "system" },
-  { hint: "Force a bright theme only if needed.", label: "Light", value: "light" },
-  { hint: "Force the shell into the darker variant.", label: "Dark", value: "dark" },
+  { hint: "Force GlareMute into the lighter appearance.", label: "Light", value: "light" },
+  { hint: "Force GlareMute into the darker appearance.", label: "Dark", value: "dark" },
+  {
+    hint: "Use the native in-app greyscale invert appearance.",
+    label: "Greyscale Invert",
+    value: "greyscaleInvert",
+  },
 ];
 
 function App() {
@@ -31,6 +41,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedReport, setCopiedReport] = useState(false);
   const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<VisualPreset>(DEFAULT_PRESET);
   const [windowQuery, setWindowQuery] = useState("");
 
   useEffect(() => watchSystemTheme(setPrefersDark), []);
@@ -81,13 +92,30 @@ function App() {
     void desktopClient.appendFrontendLog(
       "debug",
       "ui",
-      `dashboard hydrated with ${snapshot.platform.backendId}`
+      `desktop surface hydrated with ${snapshot.platform.backendId}`
     );
   }, [snapshot]);
 
-  const filteredWindowCandidates = snapshot
-    ? filterWindowCandidates(snapshot.windowCandidates, windowQuery)
-    : [];
+  useEffect(() => {
+    if (!snapshot) {
+      return;
+    }
+
+    setSelectedPreset((current) =>
+      snapshot.presets.some((preset) => preset.id === current)
+        ? current
+        : (snapshot.lens.activePreset ?? DEFAULT_PRESET)
+    );
+  }, [snapshot]);
+
+  const allWindowCandidates = snapshot?.windowCandidates ?? [];
+  const filteredWindowCandidates = filterWindowCandidates(allWindowCandidates, windowQuery);
+  const availableWindowCandidates = filteredWindowCandidates.filter(
+    (candidate) => candidate.attachmentState === "available"
+  );
+  const unavailableWindowCandidates = filteredWindowCandidates.filter(
+    (candidate) => candidate.attachmentState !== "available"
+  );
 
   useEffect(() => {
     if (!snapshot) {
@@ -95,24 +123,47 @@ function App() {
     }
 
     const nextCandidates = filterWindowCandidates(snapshot.windowCandidates, windowQuery);
+    const nextAvailableCandidates = nextCandidates.filter(
+      (candidate) => candidate.attachmentState === "available"
+    );
+    const nextUnavailableCandidates = nextCandidates.filter(
+      (candidate) => candidate.attachmentState !== "available"
+    );
 
     setSelectedWindowId((current) => {
-      if (current && nextCandidates.some((entry) => entry.windowId === current)) {
-        return current;
+      const currentWindow =
+        nextCandidates.find((candidate) => candidate.windowId === current) ?? null;
+      if (currentWindow) {
+        return currentWindow.windowId;
       }
 
-      const activeId = snapshot.lens.activeTarget?.windowId;
-      if (activeId && nextCandidates.some((entry) => entry.windowId === activeId)) {
-        return activeId;
+      const activeWindowId = snapshot.lens.activeTarget?.windowId;
+      if (
+        activeWindowId &&
+        nextCandidates.some((candidate) => candidate.windowId === activeWindowId)
+      ) {
+        return activeWindowId;
       }
 
-      return nextCandidates[0]?.windowId ?? null;
+      return nextAvailableCandidates[0]?.windowId ?? nextUnavailableCandidates[0]?.windowId ?? null;
     });
   }, [snapshot, windowQuery]);
 
   const selectedWindow =
-    snapshot?.windowCandidates.find((entry) => entry.windowId === selectedWindowId) ?? null;
+    allWindowCandidates.find((candidate) => candidate.windowId === selectedWindowId) ?? null;
   const activeTarget = snapshot?.lens.activeTarget ?? null;
+  const selectedPresetDefinition =
+    snapshot?.presets.find((preset) => preset.id === selectedPreset) ?? null;
+  const selectedPresetCapability = snapshot
+    ? presetCapability(snapshot.platform.capabilities, selectedPreset)
+    : null;
+  const selectedPresetStatus = selectedPresetCapability?.status ?? "unsupported";
+  const selectedWindowAttachable = selectedWindow?.attachmentState === "available";
+  const canAttachSelectedWindow =
+    Boolean(selectedWindow) &&
+    selectedWindowAttachable &&
+    selectedPresetStatus === "available" &&
+    busyAction !== "attach";
 
   async function updateSnapshot(task: () => Promise<AppSnapshot>, busy: BusyAction) {
     setBusyAction(busy);
@@ -145,12 +196,12 @@ function App() {
   }
 
   async function handleAttachSelectedWindow() {
-    if (!selectedWindow) {
+    if (!selectedWindow || !canAttachSelectedWindow) {
       return;
     }
 
     await updateSnapshot(
-      () => desktopClient.attachWindow(selectedWindow.windowId, "greyscaleInvert"),
+      () => desktopClient.attachWindow(selectedWindow.windowId, selectedPreset),
       "attach"
     );
   }
@@ -195,12 +246,9 @@ function App() {
     return (
       <div className="app-shell">
         <div className="app-frame loading-frame">
-          <section className="panel-card loading-card">
-            <p className="brand-mark">GlareMute</p>
-            <h1>Opening workspace…</h1>
-            <p className="body-copy">
-              Loading the current session, theme preference, and window list.
-            </p>
+          <section className="loading-card">
+            <h1>GlareMute</h1>
+            <p className="body-copy">Opening workspace and loading the current window list.</p>
           </section>
         </div>
       </div>
@@ -210,42 +258,11 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-frame">
-        <header className="app-header">
-          <div className="brand-block">
-            <p className="brand-mark">GlareMute</p>
-            <h1>Greyscale Invert</h1>
-            <p className="app-subtitle">
-              Select one visible window, attach the lens, and keep the rest of the desktop
-              unchanged.
-            </p>
-          </div>
-
-          <section className="preferences-card" aria-label="Appearance">
-            <SectionHeading
-              subtitle="System default unless you choose otherwise."
-              title="Appearance"
-            />
-            <fieldset className="theme-toggle">
-              <legend className="sr-only">Theme preference</legend>
-              {THEME_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className="theme-button"
-                  data-active={snapshot.settings.themePreference === option.value}
-                  aria-pressed={snapshot.settings.themePreference === option.value}
-                  disabled={busyAction === "theme"}
-                  onClick={() => void handleThemeChange(option.value)}
-                  title={option.hint}
-                  type="button"
-                >
-                  {option.label}
-                </button>
-              ))}
-            </fieldset>
-            <p className="body-copy">
-              Effective theme: <strong>{themeLabel(effectiveTheme)}</strong>.
-            </p>
-          </section>
+        <header className="product-header">
+          <h1>GlareMute</h1>
+          <p className="app-subtitle">
+            Choose a window and apply a relief effect without changing the rest of the desktop.
+          </p>
         </header>
 
         {errorMessage ? (
@@ -254,73 +271,110 @@ function App() {
           </output>
         ) : null}
 
-        <main className="workspace">
-          <section className="panel-card window-panel">
-            <div className="section-toolbar">
-              <SectionHeading
-                subtitle={windowListSubtitle(
-                  snapshot.windowCandidates.length,
-                  filteredWindowCandidates.length,
-                  windowQuery
-                )}
-                title="Visible windows"
+        <main className="workflow-shell">
+          <section className="workflow-pane window-pane">
+            <PaneHeader
+              subtitle={windowListSubtitle(
+                availableWindowCandidates.length,
+                unavailableWindowCandidates.length,
+                windowQuery
+              )}
+              title="Available windows"
+            />
+
+            <div className="toolbar">
+              <input
+                aria-label="Filter windows"
+                className="search-input"
+                onChange={(event) => setWindowQuery(event.target.value)}
+                placeholder="Filter by title, app, or class"
+                type="search"
+                value={windowQuery}
               />
-              <div className="toolbar">
-                <input
-                  aria-label="Filter windows"
-                  className="search-input"
-                  onChange={(event) => setWindowQuery(event.target.value)}
-                  placeholder="Filter by title, app, or class"
-                  type="search"
-                  value={windowQuery}
-                />
-                <button
-                  className="button button-secondary"
-                  disabled={busyAction === "refresh"}
-                  onClick={() => void handleRefreshWindows()}
-                  type="button"
-                >
-                  {busyAction === "refresh" ? "Refreshing…" : "Refresh list"}
-                </button>
-              </div>
+              <button
+                className="button button-secondary"
+                disabled={busyAction === "refresh"}
+                onClick={() => void handleRefreshWindows()}
+                type="button"
+              >
+                {busyAction === "refresh" ? "Refreshing…" : "Refresh list"}
+              </button>
             </div>
 
             {filteredWindowCandidates.length > 0 ? (
-              <ul aria-label="Visible windows" className="window-list">
-                {filteredWindowCandidates.map((candidate) => (
-                  <WindowRow
-                    active={activeTarget?.windowId === candidate.windowId}
-                    candidate={candidate}
-                    key={candidate.windowId}
-                    onSelect={() => setSelectedWindowId(candidate.windowId)}
-                    selected={selectedWindowId === candidate.windowId}
+              <div className="window-groups">
+                {availableWindowCandidates.length > 0 ? (
+                  <WindowGroup
+                    ariaLabel="Windows ready to attach"
+                    candidates={availableWindowCandidates}
+                    heading="Ready now"
+                    onSelect={setSelectedWindowId}
+                    selectedWindowId={selectedWindowId}
+                    activeWindowId={activeTarget?.windowId ?? null}
                   />
-                ))}
-              </ul>
+                ) : null}
+
+                {unavailableWindowCandidates.length > 0 ? (
+                  <WindowGroup
+                    ariaLabel="Windows that need to be restored first"
+                    candidates={unavailableWindowCandidates}
+                    heading="Restore first"
+                    onSelect={setSelectedWindowId}
+                    selectedWindowId={selectedWindowId}
+                    activeWindowId={activeTarget?.windowId ?? null}
+                  />
+                ) : null}
+              </div>
             ) : (
               <div className="empty-state">
-                {snapshot.windowCandidates.length === 0
-                  ? "No visible windows are available yet. Bring the target app to the desktop and refresh the list."
+                {allWindowCandidates.length === 0
+                  ? "No windows are available yet. Bring the target app to the desktop and refresh the list."
                   : "No windows match the current filter."}
               </div>
             )}
           </section>
 
-          <aside className="sidebar-stack">
-            <section className="panel-card">
-              <div className="lens-summary">
-                <SectionHeading subtitle={lensMessage(snapshot)} title="Lens" />
-                <StatusChip
-                  label={lensLabel(snapshot.lens.status)}
-                  status={lensStatusChip(snapshot.lens.status)}
-                />
-              </div>
+          <section className="workflow-pane lens-pane">
+            <div className="lens-header">
+              <PaneHeader subtitle={lensMessage(snapshot)} title="Lens" />
+              <StatusChip
+                label={lensLabel(snapshot.lens.status)}
+                status={lensStatusChip(snapshot.lens.status)}
+              />
+            </div>
 
-              <dl className="detail-list">
-                <div>
-                  <dt>Effect</dt>
-                  <dd>Greyscale Invert</dd>
+            <section className="pane-section">
+              <label className="field-label" htmlFor="effect-select">
+                Effect
+              </label>
+              <select
+                className="field-select"
+                id="effect-select"
+                onChange={(event) => setSelectedPreset(event.target.value as VisualPreset)}
+                value={selectedPreset}
+              >
+                {snapshot.presets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+              {selectedPresetDefinition ? (
+                <div className="field-note">
+                  <StatusChip
+                    label={presetAvailabilityLabel(selectedPresetStatus)}
+                    status={statusTone(selectedPresetStatus)}
+                  />
+                  <p className="body-copy">{selectedPresetDefinition.summary}</p>
+                  {selectedPresetStatus !== "available" ? (
+                    <p className="body-copy muted-copy">{selectedPresetCapability?.summary}</p>
+                  ) : null}
                 </div>
+              ) : null}
+            </section>
+
+            <section className="pane-section">
+              <dl className="detail-list">
                 <div>
                   <dt>Selected window</dt>
                   <dd>{selectedWindow?.title ?? "No window selected"}</dd>
@@ -334,130 +388,216 @@ function App() {
                   <dd>{snapshot.settings.panicHotkey}</dd>
                 </div>
               </dl>
+            </section>
 
-              <div className="control-stack">
+            <section className="pane-section action-section">
+              <button
+                className="button"
+                disabled={!canAttachSelectedWindow}
+                onClick={() => void handleAttachSelectedWindow()}
+                type="button"
+              >
+                {attachButtonLabel(
+                  busyAction,
+                  selectedPresetDefinition,
+                  selectedPresetStatus,
+                  selectedWindow
+                )}
+              </button>
+              <p className="body-copy action-hint">
+                {attachHint(selectedWindow, selectedPresetCapability, selectedPresetStatus)}
+              </p>
+              <div className="button-row">
                 <button
-                  className="button"
-                  disabled={!selectedWindow || busyAction === "attach"}
-                  onClick={() => void handleAttachSelectedWindow()}
+                  className="button button-secondary"
+                  disabled={busyAction === "suspend"}
+                  onClick={() => void handleSuspendToggle()}
                   type="button"
                 >
-                  {busyAction === "attach" ? "Attaching…" : "Attach Greyscale Invert"}
+                  {busyAction === "suspend"
+                    ? "Working…"
+                    : snapshot.diagnostics.suspended
+                      ? "Resume lens"
+                      : "Suspend lens"}
                 </button>
-                <div className="button-row">
-                  <button
-                    className="button button-secondary"
-                    disabled={busyAction === "suspend"}
-                    onClick={() => void handleSuspendToggle()}
-                    type="button"
-                  >
-                    {busyAction === "suspend"
-                      ? "Working…"
-                      : snapshot.diagnostics.suspended
-                        ? "Resume lens"
-                        : "Suspend lens"}
-                  </button>
-                  <button
-                    className="button button-secondary"
-                    disabled={!activeTarget || busyAction === "detach"}
-                    onClick={() => void handleDetachLens()}
-                    type="button"
-                  >
-                    {busyAction === "detach" ? "Detaching…" : "Detach lens"}
-                  </button>
-                </div>
+                <button
+                  className="button button-secondary"
+                  disabled={!activeTarget || busyAction === "detach"}
+                  onClick={() => void handleDetachLens()}
+                  type="button"
+                >
+                  {busyAction === "detach" ? "Detaching…" : "Detach lens"}
+                </button>
               </div>
             </section>
+          </section>
 
-            <section className="panel-card">
-              <SectionHeading
-                subtitle="The current selection is what Attach uses."
-                title="Selected window"
-              />
-              {selectedWindow ? (
-                <SelectedWindowDetails candidate={selectedWindow} />
-              ) : (
-                <div className="empty-state">
-                  Select a visible window from the list to inspect it and attach the lens.
-                </div>
-              )}
-            </section>
+          <aside className="workflow-pane details-pane">
+            <PaneHeader
+              subtitle="The current selection is what Attach uses."
+              title="Window details"
+            />
+            {selectedWindow ? (
+              <SelectedWindowDetails candidate={selectedWindow} />
+            ) : (
+              <div className="empty-state">
+                Select a window from the list to inspect it and attach the lens.
+              </div>
+            )}
           </aside>
         </main>
 
-        <details className="support-panel">
+        <details className="drawer-panel settings-panel">
           <summary>
-            <span>Support & diagnostics</span>
-            <span className="mono">{snapshot.platform.backendLabel}</span>
+            <span>Settings</span>
+            <span className="mono">
+              {themeSummary(snapshot.settings.themePreference, effectiveTheme)}
+            </span>
           </summary>
-          <div className="support-body">
-            <div className="support-actions">
-              <button
-                className="button button-secondary"
-                disabled={busyAction === "logs"}
-                onClick={() => void handleOpenLogs()}
-                type="button"
+          <div className="drawer-body">
+            <section className="drawer-section">
+              <PaneHeader
+                subtitle="GlareMute supports its own appearance modes natively, including Greyscale Invert."
+                title="Theme"
+              />
+              <label className="field-label" htmlFor="theme-select">
+                Theme
+              </label>
+              <select
+                className="field-select"
+                disabled={busyAction === "theme"}
+                id="theme-select"
+                onChange={(event) => void handleThemeChange(event.target.value as ThemePreference)}
+                value={snapshot.settings.themePreference}
               >
-                {busyAction === "logs" ? "Opening…" : "Open logs"}
-              </button>
-              <button
-                className="button button-secondary"
-                disabled={busyAction === "copy"}
-                onClick={() => void handleCopyDebugReport()}
-                type="button"
-              >
-                {busyAction === "copy" ? "Copying…" : copiedReport ? "Copied" : "Copy debug report"}
-              </button>
-            </div>
-
-            <div className="support-grid">
-              <section className="support-card">
-                <SectionHeading subtitle="Local-only runtime details." title="Runtime" />
-                <dl className="detail-list">
-                  <div>
-                    <dt>Backend</dt>
-                    <dd>{snapshot.platform.backendLabel}</dd>
-                  </div>
-                  <div>
-                    <dt>Window count</dt>
-                    <dd>{snapshot.windowCandidates.length.toString()}</dd>
-                  </div>
-                  <div>
-                    <dt>Settings file</dt>
-                    <dd>{snapshot.diagnostics.settingsFile}</dd>
-                  </div>
-                  <div>
-                    <dt>Log file</dt>
-                    <dd>{snapshot.diagnostics.logFile}</dd>
-                  </div>
-                </dl>
-              </section>
-
-              <section className="support-card">
-                <SectionHeading
-                  subtitle="Newest events first."
-                  title={`Recent events (${snapshot.diagnostics.recentEvents.length})`}
-                />
-                <div className="log-list">
-                  {snapshot.diagnostics.recentEvents.slice(0, 8).map((event) => (
-                    <LogItem event={event} key={`${event.timestamp}-${event.message}`} />
-                  ))}
-                </div>
-              </section>
-            </div>
+                {THEME_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="body-copy">
+                {themeDescription(snapshot.settings.themePreference, effectiveTheme)}
+              </p>
+            </section>
           </div>
         </details>
+
+        {snapshot.devMode ? (
+          <details className="drawer-panel support-panel">
+            <summary>
+              <span>Support & diagnostics</span>
+              <span className="mono">{snapshot.platform.backendLabel}</span>
+            </summary>
+            <div className="drawer-body">
+              <div className="support-actions">
+                <button
+                  className="button button-secondary"
+                  disabled={busyAction === "logs"}
+                  onClick={() => void handleOpenLogs()}
+                  type="button"
+                >
+                  {busyAction === "logs" ? "Opening…" : "Open logs"}
+                </button>
+                <button
+                  className="button button-secondary"
+                  disabled={busyAction === "copy"}
+                  onClick={() => void handleCopyDebugReport()}
+                  type="button"
+                >
+                  {busyAction === "copy"
+                    ? "Copying…"
+                    : copiedReport
+                      ? "Copied"
+                      : "Copy debug report"}
+                </button>
+              </div>
+
+              <div className="support-grid">
+                <section className="drawer-section">
+                  <PaneHeader subtitle="Local-only runtime details." title="Runtime" />
+                  <dl className="detail-list">
+                    <div>
+                      <dt>Backend</dt>
+                      <dd>{snapshot.platform.backendLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Window count</dt>
+                      <dd>{snapshot.windowCandidates.length.toString()}</dd>
+                    </div>
+                    <div>
+                      <dt>Settings file</dt>
+                      <dd>{snapshot.diagnostics.settingsFile}</dd>
+                    </div>
+                    <div>
+                      <dt>Log file</dt>
+                      <dd>{snapshot.diagnostics.logFile}</dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section className="drawer-section">
+                  <PaneHeader
+                    subtitle="Newest events first."
+                    title={`Recent events (${snapshot.diagnostics.recentEvents.length})`}
+                  />
+                  <div className="log-list">
+                    {snapshot.diagnostics.recentEvents.slice(0, 8).map((event) => (
+                      <LogItem event={event} key={`${event.timestamp}-${event.message}`} />
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function SectionHeading({ subtitle, title }: { subtitle: string; title: string }) {
+function PaneHeader({ subtitle, title }: { subtitle: string; title: string }) {
   return (
-    <div className="section-copy">
+    <div className="pane-copy">
       <h2>{title}</h2>
       <p>{subtitle}</p>
     </div>
+  );
+}
+
+function WindowGroup({
+  activeWindowId,
+  ariaLabel,
+  candidates,
+  heading,
+  onSelect,
+  selectedWindowId,
+}: {
+  activeWindowId: string | null;
+  ariaLabel: string;
+  candidates: WindowDescriptor[];
+  heading: string;
+  onSelect: (windowId: string) => void;
+  selectedWindowId: string | null;
+}) {
+  return (
+    <section className="window-group">
+      <div className="group-heading">
+        <h3>{heading}</h3>
+        <span className="mono">{candidates.length}</span>
+      </div>
+      <ul aria-label={ariaLabel} className="window-list">
+        {candidates.map((candidate) => (
+          <WindowRow
+            active={activeWindowId === candidate.windowId}
+            candidate={candidate}
+            key={candidate.windowId}
+            onSelect={() => onSelect(candidate.windowId)}
+            selected={selectedWindowId === candidate.windowId}
+          />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -473,7 +613,11 @@ function WindowRow({
   selected: boolean;
 }) {
   return (
-    <li className="window-row" data-selected={selected}>
+    <li
+      className="window-row"
+      data-attachable={candidate.attachmentState === "available"}
+      data-selected={selected}
+    >
       <button aria-selected={selected} className="window-select" onClick={onSelect} type="button">
         <div className="window-title-line">
           <strong className="window-title">{candidate.title}</strong>
@@ -481,10 +625,13 @@ function WindowRow({
         <p className="window-subtitle">
           {executableName(candidate.executablePath)}
           {candidate.windowClass ? ` • ${candidate.windowClass}` : ""}
-          {` • ${candidate.bounds.width}x${candidate.bounds.height}`}
+          {candidate.attachmentState === "minimized" ? " • Restore to attach" : ""}
         </p>
       </button>
       <div className="window-state">
+        {candidate.attachmentState === "minimized" ? (
+          <StatusChip label="Minimized" status="neutral" />
+        ) : null}
         {candidate.isForeground ? <StatusChip label="Foreground" status="experimental" /> : null}
         {active ? <StatusChip label="Attached" status="available" /> : null}
       </div>
@@ -498,6 +645,10 @@ function SelectedWindowDetails({ candidate }: { candidate: WindowDescriptor }) {
       <div>
         <dt>Title</dt>
         <dd>{candidate.title}</dd>
+      </div>
+      <div>
+        <dt>State</dt>
+        <dd>{windowStateLabel(candidate)}</dd>
       </div>
       <div>
         <dt>Application</dt>
@@ -545,7 +696,7 @@ function StatusChip({
   status,
 }: {
   label?: string;
-  status: CapabilityStatus;
+  status: StatusTone;
 }) {
   return (
     <span className="status-chip" data-status={status}>
@@ -566,12 +717,91 @@ function filterWindowCandidates(candidates: WindowDescriptor[], query: string) {
       candidate.executablePath ?? "",
       executableName(candidate.executablePath),
       candidate.windowClass ?? "",
+      candidate.attachmentState,
     ]
       .join(" ")
       .toLowerCase();
 
     return haystack.includes(normalizedQuery);
   });
+}
+
+function presetCapability(capabilities: CapabilityDescriptor[], preset: VisualPreset) {
+  switch (preset) {
+    case "darken":
+    case "warmDim":
+      return capabilityById(capabilities, "tintBackend");
+    case "greyscaleInvert":
+      return capabilityById(capabilities, "magnificationBackend");
+  }
+}
+
+function capabilityById(capabilities: CapabilityDescriptor[], id: string): CapabilityDescriptor {
+  return (
+    capabilities.find((capability) => capability.id === id) ?? {
+      id,
+      label: id,
+      status: "unsupported",
+      summary: "This capability is not exposed by the current runtime.",
+    }
+  );
+}
+
+function attachButtonLabel(
+  busyAction: BusyAction,
+  preset: PresetDefinition | null,
+  presetStatus: CapabilityStatus,
+  selectedWindow: WindowDescriptor | null
+) {
+  if (busyAction === "attach") {
+    return "Attaching…";
+  }
+
+  if (!selectedWindow) {
+    return "Choose a window";
+  }
+
+  if (selectedWindow.attachmentState !== "available") {
+    return "Restore window to attach";
+  }
+
+  if (!preset || presetStatus !== "available") {
+    return `${preset?.label ?? "Effect"} not available yet`;
+  }
+
+  return `Attach ${preset.label}`;
+}
+
+function attachHint(
+  selectedWindow: WindowDescriptor | null,
+  presetCapability: CapabilityDescriptor | null,
+  presetStatus: CapabilityStatus
+) {
+  if (!selectedWindow) {
+    return "Select a window to continue.";
+  }
+
+  if (selectedWindow.attachmentState === "minimized") {
+    return "Restore this window before attaching the lens.";
+  }
+
+  if (presetStatus !== "available") {
+    return presetCapability?.summary ?? "This effect is not available in the current build.";
+  }
+
+  return "Ready to attach the selected effect to this window.";
+}
+
+function windowListSubtitle(availableCount: number, unavailableCount: number, query: string) {
+  if (query.trim()) {
+    return `${availableCount} ready now, ${unavailableCount} restore first.`;
+  }
+
+  if (unavailableCount > 0) {
+    return `${availableCount} ready now. ${unavailableCount} minimized windows stay listed below.`;
+  }
+
+  return `${availableCount} ready now.`;
 }
 
 function executableName(path: string | null) {
@@ -608,7 +838,7 @@ function lensMessage(snapshot: AppSnapshot) {
       : "Paused before any window is attached.";
   }
 
-  return "Select a window and attach Greyscale Invert.";
+  return "Select a window and choose an effect to attach.";
 }
 
 function lensStatusChip(status: AppSnapshot["lens"]["status"]): CapabilityStatus {
@@ -636,7 +866,20 @@ function levelToStatus(level: RuntimeEvent["level"]): CapabilityStatus {
   }
 }
 
-function themeLabel(theme: ThemePreference | "light" | "dark") {
+function presetAvailabilityLabel(status: CapabilityStatus) {
+  switch (status) {
+    case "available":
+      return "Available";
+    case "experimental":
+      return "Experimental";
+    case "planned":
+      return "Not available yet";
+    case "unsupported":
+      return "Unavailable";
+  }
+}
+
+function themeOptionLabel(theme: ThemePreference | "light" | "dark" | "greyscale-invert") {
   switch (theme) {
     case "system":
       return "System";
@@ -644,15 +887,55 @@ function themeLabel(theme: ThemePreference | "light" | "dark") {
       return "Light";
     case "dark":
       return "Dark";
+    case "greyscaleInvert":
+    case "greyscale-invert":
+      return "Greyscale Invert";
   }
 }
 
-function windowListSubtitle(total: number, filtered: number, query: string) {
-  if (!query.trim()) {
-    return `${total} visible ${total === 1 ? "window" : "windows"}.`;
+function themeSummary(
+  themePreference: ThemePreference,
+  effectiveTheme: "light" | "dark" | "greyscale-invert"
+) {
+  if (themePreference === "system") {
+    return `Theme: System (${themeOptionLabel(effectiveTheme)})`;
   }
 
-  return `Showing ${filtered} of ${total} visible windows.`;
+  return `Theme: ${themeOptionLabel(themePreference)}`;
+}
+
+function themeDescription(
+  themePreference: ThemePreference,
+  effectiveTheme: "light" | "dark" | "greyscale-invert"
+) {
+  if (themePreference === "system") {
+    return `Follow the operating system theme. Current result: ${themeOptionLabel(effectiveTheme)}.`;
+  }
+
+  if (themePreference === "greyscaleInvert") {
+    return "Greyscale Invert is the native in-app version of the current transform effect.";
+  }
+
+  return `Use the ${themeOptionLabel(themePreference)} appearance for GlareMute itself.`;
+}
+
+function windowStateLabel(candidate: WindowDescriptor) {
+  switch (candidate.attachmentState) {
+    case "available":
+      return "Ready to attach";
+    case "minimized":
+      return "Minimized; restore before attaching";
+  }
+}
+
+function statusTone(status: CapabilityStatus): StatusTone {
+  switch (status) {
+    case "available":
+    case "experimental":
+    case "planned":
+    case "unsupported":
+      return status;
+  }
 }
 
 export default App;

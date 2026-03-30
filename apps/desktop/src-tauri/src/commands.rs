@@ -6,7 +6,9 @@ use crate::state::ManagedState;
 
 #[tauri::command]
 pub fn bootstrap_state(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
-    state.bootstrap_snapshot().map_err(|error| error.to_string())
+    state
+        .bootstrap_snapshot()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -81,6 +83,7 @@ fn apply_theme_preference(app: &AppHandle, theme: ThemePreference) -> Result<(),
         ThemePreference::System => None,
         ThemePreference::Light => Some(Theme::Light),
         ThemePreference::Dark => Some(Theme::Dark),
+        ThemePreference::GreyscaleInvert => Some(Theme::Dark),
     };
 
     for window in app.webview_windows().values() {

@@ -10,6 +10,9 @@ pnpm dev:web
 
 Use this for frontend iteration, contract debugging, and Playwright review.
 
+This live iteration server stays on `http://127.0.0.1:1420`.
+Playwright screenshot review uses a separate production-preview server on `127.0.0.1:1421` so visual tests do not depend on the dev server state.
+
 ### Desktop loop
 
 ```bash

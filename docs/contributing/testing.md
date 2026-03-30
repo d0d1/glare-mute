@@ -5,11 +5,11 @@
 Use the browser preview for most UI verification:
 
 ```bash
-pnpm build:web
 pnpm test:e2e
 ```
 
 Playwright is the review gate for visual work.
+The e2e command builds the app and runs screenshots against a dedicated preview server on `127.0.0.1:1421`, not the hot-reloading dev server.
 
 ## Unit tests
 

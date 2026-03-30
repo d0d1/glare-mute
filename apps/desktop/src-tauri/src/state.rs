@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use glare_mute_core::{
     APP_NAME, AppSettings, AppSnapshot, LOG_FILE_NAME, PlatformSummary, RECENT_EVENT_LIMIT,
     RuntimeDiagnostics, RuntimeEvent, RuntimeEventLevel, SETTINGS_FILE_NAME, ThemePreference,
-    default_preset_catalog,
+    WindowAttachmentState, default_preset_catalog,
 };
 use tauri::{AppHandle, Manager};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -116,12 +116,21 @@ impl ManagedState {
 
     pub fn refresh_window_candidates(&self) -> Result<AppSnapshot> {
         let snapshot = self.snapshot()?;
+        let available_count = snapshot
+            .window_candidates
+            .iter()
+            .filter(|entry| entry.attachment_state == WindowAttachmentState::Available)
+            .count();
+        let minimized_count = snapshot
+            .window_candidates
+            .len()
+            .saturating_sub(available_count);
         self.record_event(
             RuntimeEventLevel::Debug,
             "picker".to_string(),
             format!(
-                "window list refreshed ({} visible candidates)",
-                snapshot.window_candidates.len()
+                "window list refreshed ({} available, {} minimized)",
+                available_count, minimized_count
             ),
         );
         Ok(snapshot)

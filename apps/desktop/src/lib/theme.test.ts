@@ -9,6 +9,7 @@ describe("theme helpers", () => {
   it("keeps explicit overrides stable", () => {
     expect(resolveEffectiveTheme("light", true)).toBe("light");
     expect(resolveEffectiveTheme("dark", false)).toBe("dark");
+    expect(resolveEffectiveTheme("greyscaleInvert", true)).toBe("greyscale-invert");
   });
 
   it("writes the document theme token", () => {

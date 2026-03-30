@@ -83,6 +83,12 @@ function createMockDesktopClient(): DesktopClient {
       if (!candidate) {
         throw new Error(`No mock window found for ${windowId}.`);
       }
+      if (candidate.attachmentState !== "available") {
+        throw new Error("Restore the selected window before attaching the lens.");
+      }
+      if (preset !== "greyscaleInvert") {
+        throw new Error(`${preset} is not available in the current build.`);
+      }
 
       snapshot.lens = {
         activePreset: preset,
@@ -164,11 +170,15 @@ function createMockDesktopClient(): DesktopClient {
     async refreshWindowCandidates() {
       const snapshot = readSnapshot();
       snapshot.windowCandidates = defaultWindowCandidates();
+      const availableCount = snapshot.windowCandidates.filter(
+        (entry) => entry.attachmentState === "available"
+      ).length;
+      const minimizedCount = snapshot.windowCandidates.length - availableCount;
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "debug",
         source: "mock-runtime",
-        message: "refreshed mock window list",
+        message: `refreshed mock window list (${availableCount} available, ${minimizedCount} minimized)`,
       });
       writeSnapshot(snapshot);
       return snapshot;
@@ -234,7 +244,7 @@ function defaultSnapshot(): AppSnapshot {
   return {
     appName: "GlareMute",
     appVersion: "0.1.0-preview",
-    devMode: true,
+    devMode: import.meta.env.DEV,
     settings: {
       themePreference: "system",
       panicHotkey: "Ctrl+Shift+Pause",
@@ -268,7 +278,7 @@ function defaultSnapshot(): AppSnapshot {
           "windowPicker",
           "Window picker",
           "experimental",
-          "Browser preview simulates native window attachment with a mock window list."
+          "Browser preview simulates native window attachment with ready-now and restore-first window states."
         ),
         capability(
           "tintBackend",
@@ -334,6 +344,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 4720,
       windowClass: "SunAwtFrame",
       bounds: { left: 128, top: 96, width: 1160, height: 820 },
+      attachmentState: "available",
       isForeground: true,
     },
     {
@@ -343,6 +354,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 8640,
       windowClass: "Notepad",
       bounds: { left: 1440, top: 128, width: 760, height: 640 },
+      attachmentState: "minimized",
       isForeground: false,
     },
     {
@@ -352,6 +364,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 3216,
       windowClass: "CabinetWClass",
       bounds: { left: 140, top: 120, width: 980, height: 700 },
+      attachmentState: "available",
       isForeground: false,
     },
     {
@@ -361,6 +374,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 7812,
       windowClass: "Chrome_WidgetWin_1",
       bounds: { left: 1180, top: 84, width: 1180, height: 860 },
+      attachmentState: "available",
       isForeground: false,
     },
     {
@@ -370,6 +384,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 11028,
       windowClass: "SunAwtFrame",
       bounds: { left: 188, top: 158, width: 1024, height: 768 },
+      attachmentState: "available",
       isForeground: false,
     },
     {
@@ -379,6 +394,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 9188,
       windowClass: "CabinetWClass",
       bounds: { left: 1268, top: 196, width: 900, height: 694 },
+      attachmentState: "minimized",
       isForeground: false,
     },
     {
@@ -388,6 +404,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 13124,
       windowClass: "MozillaWindowClass",
       bounds: { left: 78, top: 72, width: 1360, height: 890 },
+      attachmentState: "available",
       isForeground: false,
     },
     {
@@ -397,6 +414,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       processId: 14448,
       windowClass: "SALFRAME",
       bounds: { left: 320, top: 188, width: 1280, height: 760 },
+      attachmentState: "available",
       isForeground: false,
     },
   ];

@@ -62,12 +62,20 @@ mod platform {
             })
         }
 
-        pub fn attach_window(&self, _window_id: &str, _preset: VisualPreset) -> Result<LensSnapshot> {
+        pub fn attach_window(
+            &self,
+            _window_id: &str,
+            _preset: VisualPreset,
+        ) -> Result<LensSnapshot> {
             bail!("Native window attachment only runs in the Windows desktop shell.")
         }
 
         pub fn detach(&self) -> Result<LensSnapshot> {
-            Ok(self.snapshot.lock().expect("preview lens lock poisoned").clone())
+            Ok(self
+                .snapshot
+                .lock()
+                .expect("preview lens lock poisoned")
+                .clone())
         }
 
         pub fn list_windows(&self) -> Result<Vec<WindowDescriptor>> {
@@ -85,7 +93,11 @@ mod platform {
         }
 
         pub fn snapshot(&self) -> Result<LensSnapshot> {
-            Ok(self.snapshot.lock().expect("preview lens lock poisoned").clone())
+            Ok(self
+                .snapshot
+                .lock()
+                .expect("preview lens lock poisoned")
+                .clone())
         }
     }
 }
@@ -100,7 +112,8 @@ mod platform {
 
     use anyhow::{Context, Result, anyhow, bail};
     use glare_mute_core::{
-        LensSnapshot, LensStatus, VisualPreset, WindowBounds, WindowDescriptor,
+        LensSnapshot, LensStatus, VisualPreset, WindowAttachmentState, WindowBounds,
+        WindowDescriptor,
     };
     use windows::Win32::Foundation::{
         COLORREF, CloseHandle, GetLastError, HWND, LPARAM, LRESULT, RECT,
@@ -117,14 +130,14 @@ mod platform {
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumWindows,
-        GA_ROOTOWNER, GWL_EXSTYLE, GetAncestor, GetClassNameW, GetForegroundWindow,
-        GetWindowLongW, GetWindowRect, GetWindowTextLengthW,
-        GetWindowTextW, GetWindowThreadProcessId, HMENU, IsIconic, IsWindow, IsWindowVisible,
-        HWND_TOPMOST, LAYERED_WINDOW_ATTRIBUTES_FLAGS, LWA_ALPHA, MSG, PM_REMOVE, PeekMessageW,
-        RegisterClassW, SET_WINDOW_POS_FLAGS, SW_HIDE, SW_SHOWNOACTIVATE,
+        GA_ROOTOWNER, GWL_EXSTYLE, GetAncestor, GetClassNameW, GetForegroundWindow, GetWindowLongW,
+        GetWindowRect, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, HMENU,
+        HWND_TOPMOST, IsIconic, IsWindow, IsWindowVisible, LAYERED_WINDOW_ATTRIBUTES_FLAGS,
+        LWA_ALPHA, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SET_WINDOW_POS_FLAGS, SW_HIDE,
+        SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
         SetLayeredWindowAttributes, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
         WINDOW_STYLE, WNDCLASSW, WS_CHILD, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-        WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
+        WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE,
     };
     use windows::core::{BOOL, Error as WindowsError, PCWSTR, w};
 
@@ -181,6 +194,9 @@ mod platform {
 
             let descriptor = describe_window(parse_window_id(window_id)?)?
                 .ok_or_else(|| anyhow!("The selected window is no longer available."))?;
+            if descriptor.attachment_state != WindowAttachmentState::Available {
+                bail!("Restore the selected window before attaching the lens.")
+            }
             let (response_tx, response_rx) = mpsc::channel();
 
             self.command_tx
@@ -600,7 +616,10 @@ mod platform {
                 }
                 LensStatus::Suspended => {
                     if let Some(target) = active_target.as_ref() {
-                        format!("Lens output is suspended while {} remains selected.", target.title)
+                        format!(
+                            "Lens output is suspended while {} remains selected.",
+                            target.title
+                        )
                     } else {
                         "Lens output is suspended before any window is attached.".to_string()
                     }
@@ -629,13 +648,23 @@ mod platform {
         }
 
         windows.sort_by(|left: &WindowDescriptor, right: &WindowDescriptor| {
-            right
-                .is_foreground
-                .cmp(&left.is_foreground)
+            left.attachment_state
+                .cmp(&right.attachment_state)
+                .then_with(|| right.is_foreground.cmp(&left.is_foreground))
                 .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
                 .then_with(|| left.window_id.cmp(&right.window_id))
         });
-        tracing::debug!(candidate_count = windows.len(), "enumerated visible attachable windows");
+        let available_count = windows
+            .iter()
+            .filter(|entry| entry.attachment_state == WindowAttachmentState::Available)
+            .count();
+        let minimized_count = windows.len().saturating_sub(available_count);
+        tracing::debug!(
+            candidate_count = windows.len(),
+            available_count,
+            minimized_count,
+            "enumerated window candidates"
+        );
         Ok(windows)
     }
 
@@ -656,9 +685,6 @@ mod platform {
 
         unsafe {
             if !IsWindow(Some(hwnd)).as_bool() || !IsWindowVisible(hwnd).as_bool() {
-                return Ok(None);
-            }
-            if IsIconic(hwnd).as_bool() {
                 return Ok(None);
             }
             if (GetWindowLongW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW.0) != 0 {
@@ -700,6 +726,11 @@ mod platform {
             process_id,
             window_class: class_name(hwnd)?,
             bounds,
+            attachment_state: if unsafe { IsIconic(hwnd).as_bool() } {
+                WindowAttachmentState::Minimized
+            } else {
+                WindowAttachmentState::Available
+            },
             is_foreground: hwnd == unsafe { GetForegroundWindow() },
         }))
     }
@@ -856,8 +887,8 @@ mod platform {
     fn greyscale_invert_effect() -> MAGCOLOREFFECT {
         MAGCOLOREFFECT {
             transform: [
-                -0.3, -0.3, -0.3, 0.0, 0.0, -0.6, -0.6, -0.6, 0.0, 0.0, -0.1, -0.1,
-                -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0,
+                -0.3, -0.3, -0.3, 0.0, 0.0, -0.6, -0.6, -0.6, 0.0, 0.0, -0.1, -0.1, -0.1, 0.0, 0.0,
+                0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0,
             ],
         }
     }

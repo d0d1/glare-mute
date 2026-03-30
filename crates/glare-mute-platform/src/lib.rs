@@ -88,7 +88,7 @@ mod windows {
                     "windowPicker",
                     "Window picker",
                     CapabilityStatus::Available,
-                    "The Windows shell can enumerate visible top-level windows for explicit attachment.",
+                    "The Windows shell can enumerate top-level app windows and keep minimized windows visible as restore-first entries.",
                 ),
                 capability(
                     "tintBackend",

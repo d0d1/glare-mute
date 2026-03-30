@@ -4,16 +4,16 @@ GlareMute is an open-source Windows accessibility lens for bright legacy apps th
 
 The first native test slice is intentionally narrow:
 
-- enumerate visible top-level Windows app windows
+- enumerate top-level Windows app windows, including minimized restore-first entries
 - attach `Greyscale Invert` to one selected main window
-- suspend or detach the lens quickly from the dashboard or tray
+- suspend or detach the lens quickly from the app window or tray
 
 The repository is intentionally shaped for agent-driven development:
 
 - `Tauri 2 + Rust + React/TypeScript`
 - a browser-preview mode that shares the same desktop command contract
-- first-class diagnostics in the UI and on disk
-- Playwright review for visual work
+- first-class diagnostics in dev builds and on disk
+- screenshot-backed browser review against a deterministic preview server
 - local installs only, with repo-managed tooling wherever possible
 
 ## Project rules
@@ -35,6 +35,8 @@ pnpm playwright:install
 pnpm dev:web
 ```
 
+This serves the live iteration surface on `http://127.0.0.1:1420`.
+
 For the Windows desktop shell from this repo layout:
 
 ```bash
@@ -52,6 +54,8 @@ pnpm test:e2e
 cargo test -p glare-mute-core -p glare-mute-platform
 cargo check -p glare-mute-desktop
 ```
+
+`pnpm test:e2e` builds the web app and runs Playwright against a separate preview server on `http://127.0.0.1:1421`, so screenshot review does not depend on a dev server already running.
 
 ## Documentation
 

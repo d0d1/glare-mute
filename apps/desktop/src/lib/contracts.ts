@@ -1,9 +1,10 @@
-export type ThemePreference = "system" | "light" | "dark";
+export type ThemePreference = "system" | "light" | "dark" | "greyscaleInvert";
 export type EffectFamily = "tint" | "transform";
 export type VisualPreset = "darken" | "warmDim" | "greyscaleInvert";
 export type CapabilityStatus = "available" | "experimental" | "planned" | "unsupported";
 export type RuntimeEventLevel = "trace" | "debug" | "info" | "warn" | "error";
 export type LensStatus = "detached" | "attached" | "suspended";
+export type WindowAttachmentState = "available" | "minimized";
 
 export interface PresetDefinition {
   id: VisualPreset;
@@ -71,6 +72,7 @@ export interface WindowDescriptor {
   processId: number;
   windowClass: string | null;
   bounds: WindowBounds;
+  attachmentState: WindowAttachmentState;
   isForeground: boolean;
 }
 

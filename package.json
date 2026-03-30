@@ -25,7 +25,7 @@
     "check": "pnpm lint && pnpm test && cargo check --workspace",
     "playwright:install": "node ./scripts/playwright.mjs install",
     "agent:doctor": "node ./scripts/agent-doctor.mjs",
-    "agent:ui-review": "pnpm build:web && pnpm test:e2e",
+    "agent:ui-review": "pnpm test:e2e",
     "commitlint": "commitlint --edit"
   },
   "devDependencies": {

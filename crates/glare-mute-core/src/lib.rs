@@ -12,6 +12,7 @@ pub enum ThemePreference {
     System,
     Light,
     Dark,
+    GreyscaleInvert,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -123,6 +124,13 @@ pub struct WindowBounds {
     pub height: i32,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowAttachmentState {
+    Available,
+    Minimized,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowDescriptor {
@@ -132,6 +140,7 @@ pub struct WindowDescriptor {
     pub process_id: u32,
     pub window_class: Option<String>,
     pub bounds: WindowBounds,
+    pub attachment_state: WindowAttachmentState,
     pub is_foreground: bool,
 }
 

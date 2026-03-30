@@ -116,7 +116,11 @@ fn handle_menu_event(app: &AppHandle, event_id: &str) {
                         "tray".to_string(),
                         format!(
                             "tray detached lens; active target now {:?}",
-                            snapshot.lens.active_target.as_ref().map(|entry| &entry.title)
+                            snapshot
+                                .lens
+                                .active_target
+                                .as_ref()
+                                .map(|entry| &entry.title)
                         ),
                     );
                 }

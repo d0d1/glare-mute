@@ -7,13 +7,14 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   retries: process.env.CI ? 2 : 0,
   use: {
-    baseURL: "http://127.0.0.1:1420",
+    baseURL: "http://127.0.0.1:1421",
     trace: "on-first-retry",
     viewport: { width: 1440, height: 1080 },
   },
   webServer: {
-    command: "pnpm --filter @glaremute/desktop dev:web",
-    url: "http://127.0.0.1:1420",
+    command:
+      "pnpm --filter @glaremute/desktop build:web && pnpm --filter @glaremute/desktop preview:test",
+    url: "http://127.0.0.1:1421",
     reuseExistingServer: !process.env.CI,
     stdout: "pipe",
     stderr: "pipe",
