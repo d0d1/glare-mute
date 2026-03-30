@@ -7,6 +7,7 @@
 - [Development workflow](./contributing/development.md)
 - [Testing workflow](./contributing/testing.md)
 - [Debugging workflow](./operations/debugging.md)
+- [Windows IRPF test flow](./operations/windows-irpf-test.md)
 
 ## Architecture
 
@@ -28,3 +29,4 @@
 ## Operations
 
 - [Debugging](./operations/debugging.md)
+- [Windows IRPF test flow](./operations/windows-irpf-test.md)

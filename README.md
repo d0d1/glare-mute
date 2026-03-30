@@ -2,6 +2,12 @@
 
 GlareMute is an open-source Windows accessibility lens for bright legacy apps that ignore dark mode and contrast settings.
 
+The first native test slice is intentionally narrow:
+
+- enumerate visible top-level Windows app windows
+- attach `Greyscale Invert` to one selected main window
+- suspend or detach the lens quickly from the dashboard or tray
+
 The repository is intentionally shaped for agent-driven development:
 
 - `Tauri 2 + Rust + React/TypeScript`
@@ -21,17 +27,21 @@ The repository is intentionally shaped for agent-driven development:
 
 ## Quick start
 
+For the browser preview:
+
 ```bash
 pnpm install
 pnpm playwright:install
 pnpm dev:web
 ```
 
-For the desktop shell:
+For the Windows desktop shell from this repo layout:
 
 ```bash
-pnpm dev
+cmd.exe /c "cd /d C:\Users\dbhul\code\glare-mute && set TAURI_DEV_HOST=127.0.0.1 && cargo run -p glare-mute-desktop"
 ```
+
+That path avoids the Tauri CLI optional-binary issues that show up when the repo dependencies were installed from WSL.
 
 ## Verification
 
@@ -50,3 +60,4 @@ cargo check -p glare-mute-desktop
 - [Architecture overview](./docs/architecture/overview.md)
 - [Debugging workflow](./docs/operations/debugging.md)
 - [Development workflow](./docs/contributing/development.md)
+- [Windows IRPF test flow](./docs/operations/windows-irpf-test.md)

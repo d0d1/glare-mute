@@ -5,9 +5,9 @@ import type {
   AppSnapshot,
   CapabilityDescriptor,
   CapabilityStatus,
-  ProfileRule,
   RuntimeEvent,
   ThemePreference,
+  WindowDescriptor,
 } from "./lib/contracts";
 import { __resetMockDesktopClient, desktopClient } from "./lib/desktop-client";
 import {
@@ -17,7 +17,7 @@ import {
   watchSystemTheme,
 } from "./lib/theme";
 
-type BusyAction = "copy" | "logs" | "suspend" | "theme" | null;
+type BusyAction = "attach" | "copy" | "detach" | "logs" | "refresh" | "suspend" | "theme" | null;
 
 const THEME_OPTIONS: Array<{ hint: string; label: string; value: ThemePreference }> = [
   { hint: "Follow the operating system theme.", label: "System", value: "system" },
@@ -110,6 +110,18 @@ function App() {
     await updateSnapshot(() => desktopClient.toggleSuspend(), "suspend");
   }
 
+  async function handleRefreshWindows() {
+    await updateSnapshot(() => desktopClient.refreshWindowCandidates(), "refresh");
+  }
+
+  async function handleAttachWindow(windowId: string) {
+    await updateSnapshot(() => desktopClient.attachWindow(windowId, "greyscaleInvert"), "attach");
+  }
+
+  async function handleDetachLens() {
+    await updateSnapshot(() => desktopClient.detachLens(), "detach");
+  }
+
   async function handleOpenLogs() {
     setBusyAction("logs");
     setErrorMessage(null);
@@ -187,10 +199,7 @@ function App() {
               <MetaPill label="Runtime" value={snapshot.platform.backendLabel} />
               <MetaPill label="Version" value={snapshot.appVersion} />
               <MetaPill label="Theme" value={themeLabel(snapshot.settings.themePreference)} />
-              <MetaPill
-                label="Lens"
-                value={snapshot.diagnostics.suspended ? "Suspended" : "Ready"}
-              />
+              <MetaPill label="Lens" value={lensLabel(snapshot.lens.status)} />
             </div>
           </div>
 
@@ -221,7 +230,7 @@ function App() {
               ))}
             </fieldset>
             <p className="mono">
-              Effective theme: {effectiveTheme}. Panic hotkey: {snapshot.settings.panicHotkey}.
+              Effective theme: {effectiveTheme}. Emergency suspend: tray menu or dashboard toggle.
             </p>
           </aside>
         </section>
@@ -237,9 +246,9 @@ function App() {
                 value={snapshot.presets.length.toString()}
               />
               <StatCard
-                detail="Rules default to full executable path and can expand later."
-                label="Profiles"
-                value={snapshot.settings.profiles.length.toString()}
+                detail="Visible top-level windows can be refreshed and attached explicitly."
+                label="Windows"
+                value={snapshot.windowCandidates.length.toString()}
               />
               <StatCard
                 detail="Backend and UI events stay visible in-app for fast diagnosis."
@@ -247,9 +256,9 @@ function App() {
                 value={snapshot.diagnostics.recentEvents.length.toString()}
               />
               <StatCard
-                detail="Recorded so rendering bugs are easier to reproduce."
-                label="Native webview"
-                value={snapshot.platform.webviewVersion ?? "preview"}
+                detail="The first native Windows slice targets Greyscale Invert end to end."
+                label="Target"
+                value={snapshot.lens.activeTarget?.title ?? "Detached"}
               />
             </div>
           </Panel>
@@ -269,18 +278,27 @@ function App() {
           <Panel span={5} subtitle="Everything needed to inspect a failure" title="Quick actions">
             <div className="action-grid">
               <ActionCard
-                actionLabel="Not ready"
+                actionLabel={busyAction === "refresh" ? "Refreshing…" : "Refresh"}
                 actionState={windowPicker.status}
                 description={windowPicker.summary}
-                disabled
-                title="Pick Window"
+                disabled={busyAction === "refresh"}
+                onAction={() => void handleRefreshWindows()}
+                title="Refresh Windows"
               />
               <ActionCard
                 actionLabel={busyAction === "suspend" ? "Working…" : "Toggle"}
-                actionState={snapshot.diagnostics.suspended ? "planned" : "available"}
-                description="Immediate safety toggle for migraine or glare spikes."
+                actionState={snapshot.lens.status === "suspended" ? "experimental" : "available"}
+                description="Immediate safety toggle that hides the active lens without detaching it."
                 onAction={() => void handleSuspendToggle()}
                 title={snapshot.diagnostics.suspended ? "Resume Lens" : "Suspend Lens"}
+              />
+              <ActionCard
+                actionLabel={busyAction === "detach" ? "Detaching…" : "Detach"}
+                actionState={snapshot.lens.activeTarget ? "available" : "planned"}
+                description="Drops the current attachment and hides the magnifier host window."
+                disabled={!snapshot.lens.activeTarget || busyAction === "detach"}
+                onAction={() => void handleDetachLens()}
+                title="Detach Lens"
               />
               <ActionCard
                 actionLabel={busyAction === "logs" ? "Opening…" : "Open logs"}
@@ -309,35 +327,75 @@ function App() {
                 Reset preview state
               </button>
               <span className="mono">
-                Transform candidate: {transformCapability.label} ({transformCapability.status})
+                Active backend: {snapshot.lens.backendLabel} ({transformCapability.status})
               </span>
             </div>
           </Panel>
 
           <Panel
             span={6}
-            subtitle="Scoped to humans, but optimized for agents to inspect"
-            title="Attachment rules"
+            subtitle="This is the native path that makes the first IRPF test possible"
+            title="Window Picker"
           >
-            {snapshot.settings.profiles.length > 0 ? (
+            {snapshot.windowCandidates.length > 0 ? (
               <div className="profile-grid">
-                {snapshot.settings.profiles.map((profile) => (
-                  <ProfileCard
-                    key={`${profile.executablePath}-${profile.preset}`}
-                    profile={profile}
+                {snapshot.windowCandidates.map((candidate) => (
+                  <WindowCandidateCard
+                    busy={busyAction === "attach"}
+                    candidate={candidate}
+                    key={candidate.windowId}
+                    onAttach={() => void handleAttachWindow(candidate.windowId)}
                   />
                 ))}
               </div>
             ) : (
               <div className="empty-state">
-                No attachment profiles yet. The v1 shell is ready for full-path-based rules once the
-                native picker lands.
+                No visible attachable windows were detected. Bring IRPF to the desktop, then
+                refresh.
               </div>
             )}
           </Panel>
 
           <Panel
             span={6}
+            subtitle="State stays explicit so agents and humans can diagnose attachment failures fast"
+            title="Active Lens"
+          >
+            <div className="profile-card">
+              <div className="panel-header">
+                <strong>{snapshot.lens.activeTarget?.title ?? "No active target"}</strong>
+                <StatusChip status={lensStatusChip(snapshot.lens.status)} />
+              </div>
+              <p>{snapshot.lens.summary}</p>
+              {snapshot.lens.activeTarget ? (
+                <dl className="key-value">
+                  <div>
+                    <dt>Preset</dt>
+                    <dd>{snapshot.lens.activePreset ?? "none"}</dd>
+                  </div>
+                  <div>
+                    <dt>Window</dt>
+                    <dd>{snapshot.lens.activeTarget.windowId}</dd>
+                  </div>
+                  <div>
+                    <dt>Executable</dt>
+                    <dd>{snapshot.lens.activeTarget.executablePath ?? "Unavailable"}</dd>
+                  </div>
+                  <div>
+                    <dt>Class</dt>
+                    <dd>{snapshot.lens.activeTarget.windowClass ?? "Unavailable"}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <div className="empty-state">
+                  Attach `Greyscale Invert` to a visible window to activate the first native slice.
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          <Panel
+            span={12}
             subtitle="Shared by the mock shell and Tauri runtime"
             title="Preset catalog"
           >
@@ -348,7 +406,13 @@ function App() {
                     <strong>{preset.label}</strong>
                     <span
                       className="status-chip"
-                      data-status={preset.family === "tint" ? "available" : "experimental"}
+                      data-status={
+                        preset.id === "greyscaleInvert"
+                          ? "available"
+                          : preset.family === "tint"
+                            ? "planned"
+                            : "experimental"
+                      }
                     >
                       {preset.family}
                     </span>
@@ -488,20 +552,33 @@ function ActionCard({
   );
 }
 
-function ProfileCard({ profile }: { profile: ProfileRule }) {
+function WindowCandidateCard({
+  busy,
+  candidate,
+  onAttach,
+}: {
+  busy: boolean;
+  candidate: WindowDescriptor;
+  onAttach: () => void;
+}) {
   return (
     <article className="profile-card">
       <div className="panel-header">
-        <strong>{profile.executablePath}</strong>
-        <span className="status-chip" data-status="planned">
-          {profile.preset}
-        </span>
+        <strong>{candidate.title}</strong>
+        <StatusChip status={candidate.isForeground ? "available" : "experimental"} />
       </div>
       <p>
-        {profile.windowClass ? `Class: ${profile.windowClass}. ` : ""}
-        {profile.titlePattern ? `Title: ${profile.titlePattern}. ` : ""}
-        {profile.notes ?? "Full-path rule with optional extra matchers."}
+        {candidate.executablePath ?? "Executable unavailable"}.{" "}
+        {candidate.windowClass ? `Class: ${candidate.windowClass}. ` : ""}
+        Bounds: {candidate.bounds.width}x{candidate.bounds.height} at {candidate.bounds.left},
+        {candidate.bounds.top}.
       </p>
+      <div className="button-row">
+        <code className="mono">{candidate.windowId}</code>
+        <button className="button" disabled={busy} onClick={onAttach} type="button">
+          {busy ? "Attaching…" : "Attach Greyscale Invert"}
+        </button>
+      </div>
     </article>
   );
 }
@@ -560,6 +637,28 @@ function themeLabel(theme: ThemePreference): string {
       return "Light override";
     case "dark":
       return "Dark override";
+  }
+}
+
+function lensLabel(status: AppSnapshot["lens"]["status"]): string {
+  switch (status) {
+    case "detached":
+      return "Detached";
+    case "attached":
+      return "Attached";
+    case "suspended":
+      return "Suspended";
+  }
+}
+
+function lensStatusChip(status: AppSnapshot["lens"]["status"]): CapabilityStatus {
+  switch (status) {
+    case "attached":
+      return "available";
+    case "suspended":
+      return "experimental";
+    case "detached":
+      return "planned";
   }
 }
 

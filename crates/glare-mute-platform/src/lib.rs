@@ -87,20 +87,20 @@ mod windows {
                 capability(
                     "windowPicker",
                     "Window picker",
-                    CapabilityStatus::Experimental,
-                    "The tray shell is ready for picker wiring, but native selection is still scaffolded.",
+                    CapabilityStatus::Available,
+                    "The Windows shell can enumerate visible top-level windows for explicit attachment.",
                 ),
                 capability(
                     "tintBackend",
                     "Tint backend",
-                    CapabilityStatus::Available,
-                    "The long-term v1 path favors a zero-lag tint overlay for dimming presets.",
+                    CapabilityStatus::Planned,
+                    "Tint presets stay in the contract, but the first native slice ships the transform path first.",
                 ),
                 capability(
                     "magnificationBackend",
                     "Magnification transform",
-                    CapabilityStatus::Experimental,
-                    "Magnification API is the first transform candidate to spike and measure.",
+                    CapabilityStatus::Available,
+                    "Greyscale Invert runs through the Magnification API for the first Windows test slice.",
                 ),
                 capability(
                     "captureBackend",

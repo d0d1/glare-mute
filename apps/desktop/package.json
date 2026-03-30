@@ -5,14 +5,14 @@
   "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
-    "dev:web": "vite --host 127.0.0.1 --port 1420 --strictPort",
-    "build:web": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1 --port 1420 --strictPort",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "dev:web": "node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 1420 --strictPort",
+    "build:web": "node ./node_modules/typescript/lib/tsc.js --noEmit && node ./node_modules/vite/bin/vite.js build",
+    "preview": "node ./node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 1420 --strictPort",
+    "test": "node ./node_modules/vitest/vitest.mjs run",
+    "test:watch": "node ./node_modules/vitest/vitest.mjs",
+    "tauri": "node ./node_modules/@tauri-apps/cli/tauri.js",
+    "tauri:dev": "node ./node_modules/@tauri-apps/cli/tauri.js dev",
+    "tauri:build": "node ./node_modules/@tauri-apps/cli/tauri.js build"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.7",

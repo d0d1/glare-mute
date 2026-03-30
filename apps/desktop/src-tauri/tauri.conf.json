@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.d0d1.glaremute",
   "build": {
-    "beforeDevCommand": "pnpm --dir .. dev:web",
+    "beforeDevCommand": "npm exec --yes pnpm@10.32.1 -- dev:web",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm --dir .. build:web",
+    "beforeBuildCommand": "npm exec --yes pnpm@10.32.1 -- build:web",
     "frontendDist": "../dist"
   },
   "app": {

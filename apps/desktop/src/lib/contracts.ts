@@ -3,6 +3,7 @@ export type EffectFamily = "tint" | "transform";
 export type VisualPreset = "darken" | "warmDim" | "greyscaleInvert";
 export type CapabilityStatus = "available" | "experimental" | "planned" | "unsupported";
 export type RuntimeEventLevel = "trace" | "debug" | "info" | "warn" | "error";
+export type LensStatus = "detached" | "attached" | "suspended";
 
 export interface PresetDefinition {
   id: VisualPreset;
@@ -56,6 +57,31 @@ export interface PlatformSummary {
   capabilities: CapabilityDescriptor[];
 }
 
+export interface WindowBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface WindowDescriptor {
+  windowId: string;
+  title: string;
+  executablePath: string | null;
+  processId: number;
+  windowClass: string | null;
+  bounds: WindowBounds;
+  isForeground: boolean;
+}
+
+export interface LensSnapshot {
+  status: LensStatus;
+  activePreset: VisualPreset | null;
+  activeTarget: WindowDescriptor | null;
+  summary: string;
+  backendLabel: string;
+}
+
 export interface AppSnapshot {
   appName: string;
   appVersion: string;
@@ -64,4 +90,6 @@ export interface AppSnapshot {
   presets: PresetDefinition[];
   diagnostics: RuntimeDiagnostics;
   platform: PlatformSummary;
+  lens: LensSnapshot;
+  windowCandidates: WindowDescriptor[];
 }

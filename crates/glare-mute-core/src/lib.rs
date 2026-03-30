@@ -116,6 +116,45 @@ pub struct PlatformSummary {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WindowBounds {
+    pub left: i32,
+    pub top: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowDescriptor {
+    pub window_id: String,
+    pub title: String,
+    pub executable_path: Option<String>,
+    pub process_id: u32,
+    pub window_class: Option<String>,
+    pub bounds: WindowBounds,
+    pub is_foreground: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LensStatus {
+    Detached,
+    Attached,
+    Suspended,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LensSnapshot {
+    pub status: LensStatus,
+    pub active_preset: Option<VisualPreset>,
+    pub active_target: Option<WindowDescriptor>,
+    pub summary: String,
+    pub backend_label: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
     pub app_name: String,
     pub app_version: String,
@@ -124,6 +163,8 @@ pub struct AppSnapshot {
     pub presets: Vec<PresetDefinition>,
     pub diagnostics: RuntimeDiagnostics,
     pub platform: PlatformSummary,
+    pub lens: LensSnapshot,
+    pub window_candidates: Vec<WindowDescriptor>,
 }
 
 impl Default for VisualPreset {
@@ -187,5 +228,11 @@ mod tests {
         assert_eq!(presets.len(), 3);
         assert_eq!(presets[0].id, VisualPreset::Darken);
         assert_eq!(presets[2].family, EffectFamily::Transform);
+    }
+
+    #[test]
+    fn lens_status_serializes_as_camel_case() {
+        let payload = serde_json::to_string(&LensStatus::Detached).expect("serialize lens status");
+        assert_eq!(payload, "\"detached\"");
     }
 }

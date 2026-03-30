@@ -7,6 +7,7 @@ use crate::state::ManagedState;
 
 const MENU_OPEN: &str = "open";
 const MENU_TOGGLE_SUSPEND: &str = "toggle-suspend";
+const MENU_DETACH_LENS: &str = "detach-lens";
 const MENU_OPEN_LOGS: &str = "open-logs";
 const MENU_QUIT: &str = "quit";
 const TRAY_ID: &str = "main-tray";
@@ -20,6 +21,7 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let detach = MenuItem::with_id(app, MENU_DETACH_LENS, "Detach lens", true, None::<&str>)?;
     let open_logs = MenuItem::with_id(
         app,
         MENU_OPEN_LOGS,
@@ -29,7 +31,10 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
     )?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &suspend, &open_logs, &separator, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&open, &suspend, &detach, &open_logs, &separator, &quit],
+    )?;
 
     TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
@@ -82,15 +87,47 @@ fn handle_menu_event(app: &AppHandle, event_id: &str) {
         }
         MENU_TOGGLE_SUSPEND => {
             let state = app.state::<ManagedState>();
-            let snapshot = state.toggle_suspend();
-            state.record_event(
-                glare_mute_core::RuntimeEventLevel::Debug,
-                "tray".to_string(),
-                format!(
-                    "tray toggled suspended state to {}",
-                    snapshot.diagnostics.suspended
-                ),
-            );
+            match state.toggle_suspend() {
+                Ok(snapshot) => {
+                    state.record_event(
+                        glare_mute_core::RuntimeEventLevel::Debug,
+                        "tray".to_string(),
+                        format!(
+                            "tray toggled suspended state to {}",
+                            snapshot.diagnostics.suspended
+                        ),
+                    );
+                }
+                Err(error) => {
+                    state.record_event(
+                        glare_mute_core::RuntimeEventLevel::Error,
+                        "tray".to_string(),
+                        format!("tray failed to toggle suspended state: {error}"),
+                    );
+                }
+            }
+        }
+        MENU_DETACH_LENS => {
+            let state = app.state::<ManagedState>();
+            match state.detach_lens() {
+                Ok(snapshot) => {
+                    state.record_event(
+                        glare_mute_core::RuntimeEventLevel::Debug,
+                        "tray".to_string(),
+                        format!(
+                            "tray detached lens; active target now {:?}",
+                            snapshot.lens.active_target.as_ref().map(|entry| &entry.title)
+                        ),
+                    );
+                }
+                Err(error) => {
+                    state.record_event(
+                        glare_mute_core::RuntimeEventLevel::Error,
+                        "tray".to_string(),
+                        format!("tray failed to detach lens: {error}"),
+                    );
+                }
+            }
         }
         MENU_OPEN_LOGS => {
             if let Ok(log_directory) = app.path().app_log_dir() {

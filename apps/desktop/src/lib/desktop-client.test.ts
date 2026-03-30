@@ -26,5 +26,23 @@ describe("desktopClient mock runtime", () => {
     const nextSnapshot = await desktopClient.toggleSuspend();
 
     expect(nextSnapshot.diagnostics.suspended).toBe(true);
+    expect(nextSnapshot.lens.status).toBe("suspended");
+  });
+
+  it("attaches the mock greyscale lens to a listed window", async () => {
+    const snapshot = await desktopClient.bootstrapState();
+    const candidate = snapshot.windowCandidates[0];
+    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "greyscaleInvert");
+
+    expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
+    expect(nextSnapshot.lens.activePreset).toBe("greyscaleInvert");
+    expect(nextSnapshot.lens.status).toBe("attached");
+  });
+
+  it("refreshes the mock window list", async () => {
+    await desktopClient.bootstrapState();
+    const nextSnapshot = await desktopClient.refreshWindowCandidates();
+
+    expect(nextSnapshot.windowCandidates.length).toBeGreaterThan(0);
   });
 });

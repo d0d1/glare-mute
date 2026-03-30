@@ -1,4 +1,5 @@
 mod commands;
+mod lens;
 mod logging;
 mod state;
 mod tray;
@@ -34,10 +35,13 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::attach_window,
             commands::append_frontend_log,
             commands::bootstrap_state,
+            commands::detach_lens,
             commands::get_debug_report,
             commands::open_logs_directory,
+            commands::refresh_window_candidates,
             commands::set_theme_preference,
             commands::toggle_suspend
         ])

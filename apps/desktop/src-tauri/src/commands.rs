@@ -1,12 +1,35 @@
-use glare_mute_core::{AppSnapshot, RuntimeEventLevel, ThemePreference};
+use glare_mute_core::{AppSnapshot, RuntimeEventLevel, ThemePreference, VisualPreset};
 use tauri::{AppHandle, Manager, State, Theme};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::state::ManagedState;
 
 #[tauri::command]
-pub fn bootstrap_state(state: State<'_, ManagedState>) -> AppSnapshot {
-    state.bootstrap_snapshot()
+pub fn bootstrap_state(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
+    state.bootstrap_snapshot().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn refresh_window_candidates(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
+    state
+        .refresh_window_candidates()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn attach_window(
+    state: State<'_, ManagedState>,
+    window_id: String,
+    preset: VisualPreset,
+) -> Result<AppSnapshot, String> {
+    state
+        .attach_window(&window_id, preset)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn detach_lens(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
+    state.detach_lens().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -22,8 +45,8 @@ pub fn set_theme_preference(
 }
 
 #[tauri::command]
-pub fn toggle_suspend(state: State<'_, ManagedState>) -> AppSnapshot {
-    state.toggle_suspend()
+pub fn toggle_suspend(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
+    state.toggle_suspend().map_err(|error| error.to_string())
 }
 
 #[tauri::command]

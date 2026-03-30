@@ -12,9 +12,12 @@ use glare_mute_core::{
 use tauri::{AppHandle, Manager};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
+use crate::lens::LensController;
+
 pub struct ManagedState {
     settings_store: Mutex<SettingsStore>,
     diagnostics: Mutex<DiagnosticsState>,
+    lens: LensController,
     platform: PlatformSummary,
     app_version: String,
     settings_file: PathBuf,
@@ -49,6 +52,7 @@ impl ManagedState {
         let log_file = log_directory.join(LOG_FILE_NAME);
         let settings = load_settings(&settings_file)?;
         let webview_version = tauri::webview_version().ok();
+        let lens = LensController::new(settings.suspend_on_startup)?;
 
         Ok(Self {
             settings_store: Mutex::new(SettingsStore {
@@ -58,6 +62,7 @@ impl ManagedState {
                 suspended: settings.suspend_on_startup,
                 recent_events: VecDeque::new(),
             }),
+            lens,
             platform: glare_mute_platform::probe_platform(webview_version),
             app_version: app.package_info().version.to_string(),
             settings_file,
@@ -66,7 +71,7 @@ impl ManagedState {
         })
     }
 
-    pub fn bootstrap_snapshot(&self) -> AppSnapshot {
+    pub fn bootstrap_snapshot(&self) -> Result<AppSnapshot> {
         self.snapshot()
     }
 
@@ -84,15 +89,17 @@ impl ManagedState {
             format!("theme preference updated to {:?}", theme),
         );
 
-        Ok(self.snapshot_with_settings(snapshot))
+        self.snapshot_with_settings(snapshot)
     }
 
-    pub fn toggle_suspend(&self) -> AppSnapshot {
+    pub fn toggle_suspend(&self) -> Result<AppSnapshot> {
         let new_state = {
             let mut diagnostics = self.diagnostics.lock().expect("diagnostics lock poisoned");
             diagnostics.suspended = !diagnostics.suspended;
             diagnostics.suspended
         };
+
+        self.lens.set_suspended(new_state)?;
 
         self.record_event(
             RuntimeEventLevel::Info,
@@ -102,6 +109,47 @@ impl ManagedState {
             } else {
                 "lens output resumed".to_string()
             },
+        );
+
+        self.snapshot()
+    }
+
+    pub fn refresh_window_candidates(&self) -> Result<AppSnapshot> {
+        self.record_event(
+            RuntimeEventLevel::Debug,
+            "picker".to_string(),
+            "window list refreshed".to_string(),
+        );
+
+        self.snapshot()
+    }
+
+    pub fn attach_window(
+        &self,
+        window_id: &str,
+        preset: glare_mute_core::VisualPreset,
+    ) -> Result<AppSnapshot> {
+        let lens = self.lens.attach_window(window_id, preset)?;
+        let target = lens
+            .active_target
+            .as_ref()
+            .map(|entry| entry.title.as_str())
+            .unwrap_or("selected window");
+        self.record_event(
+            RuntimeEventLevel::Info,
+            "lens".to_string(),
+            format!("attached {:?} to {}", preset, target),
+        );
+
+        self.snapshot()
+    }
+
+    pub fn detach_lens(&self) -> Result<AppSnapshot> {
+        self.lens.detach()?;
+        self.record_event(
+            RuntimeEventLevel::Info,
+            "lens".to_string(),
+            "detached active lens target".to_string(),
         );
 
         self.snapshot()
@@ -133,10 +181,10 @@ impl ManagedState {
     }
 
     pub fn debug_report(&self) -> Result<String> {
-        serde_json::to_string_pretty(&self.snapshot()).context("failed to serialize debug report")
+        serde_json::to_string_pretty(&self.snapshot()?).context("failed to serialize debug report")
     }
 
-    fn snapshot(&self) -> AppSnapshot {
+    fn snapshot(&self) -> Result<AppSnapshot> {
         let settings = self
             .settings_store
             .lock()
@@ -147,10 +195,12 @@ impl ManagedState {
         self.snapshot_with_settings(settings)
     }
 
-    fn snapshot_with_settings(&self, settings: AppSettings) -> AppSnapshot {
+    fn snapshot_with_settings(&self, settings: AppSettings) -> Result<AppSnapshot> {
         let diagnostics = self.diagnostics.lock().expect("diagnostics lock poisoned");
+        let lens = self.lens.snapshot()?;
+        let window_candidates = self.lens.list_windows()?;
 
-        AppSnapshot {
+        Ok(AppSnapshot {
             app_name: APP_NAME.to_string(),
             app_version: self.app_version.clone(),
             dev_mode: self.dev_mode,
@@ -163,7 +213,9 @@ impl ManagedState {
                 recent_events: diagnostics.recent_events.iter().cloned().collect(),
             },
             platform: self.platform.clone(),
-        }
+            lens,
+            window_candidates,
+        })
     }
 }
 

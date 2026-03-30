@@ -28,8 +28,18 @@ cargo test -p glare-mute-core -p glare-mute-platform
 cargo check -p glare-mute-desktop
 ```
 
+For the native Windows shell itself, also validate a direct Windows compile:
+
+```cmd
+cd /d C:\Users\dbhul\code\glare-mute
+cargo check -p glare-mute-desktop
+```
+
+Use the [Windows IRPF test flow](../operations/windows-irpf-test.md) when the change affects window enumeration, Magnification API behavior, or tray safety controls.
+
 ## Why the split exists
 
 - Playwright gives screenshot-backed confidence for the shell
 - Vitest keeps pure logic validation fast
 - Rust checks protect the native integration layer without requiring full packaging
+- the direct Windows compile catches Win32 binding drift that Linux checks cannot see

@@ -9,16 +9,23 @@ declare global {
 }
 
 interface DesktopClient {
+  attachWindow(windowId: string, preset: VisualPreset): Promise<AppSnapshot>;
   appendFrontendLog(level: RuntimeEventLevel, source: string, message: string): Promise<void>;
   bootstrapState(): Promise<AppSnapshot>;
+  detachLens(): Promise<AppSnapshot>;
   getDebugReport(): Promise<string>;
   openLogsDirectory(): Promise<void>;
+  refreshWindowCandidates(): Promise<AppSnapshot>;
   setThemePreference(theme: ThemePreference): Promise<AppSnapshot>;
   toggleSuspend(): Promise<AppSnapshot>;
 }
 
 export const desktopClient: DesktopClient = isTauriRuntime()
   ? {
+      async attachWindow(windowId, preset) {
+        const invoke = await loadInvoke();
+        return invoke<AppSnapshot>("attach_window", { windowId, preset });
+      },
       async appendFrontendLog(level, source, message) {
         const invoke = await loadInvoke();
         return invoke("append_frontend_log", { level, source, message });
@@ -27,6 +34,10 @@ export const desktopClient: DesktopClient = isTauriRuntime()
         const invoke = await loadInvoke();
         return invoke<AppSnapshot>("bootstrap_state");
       },
+      async detachLens() {
+        const invoke = await loadInvoke();
+        return invoke<AppSnapshot>("detach_lens");
+      },
       async getDebugReport() {
         const invoke = await loadInvoke();
         return invoke<string>("get_debug_report");
@@ -34,6 +45,10 @@ export const desktopClient: DesktopClient = isTauriRuntime()
       async openLogsDirectory() {
         const invoke = await loadInvoke();
         return invoke("open_logs_directory");
+      },
+      async refreshWindowCandidates() {
+        const invoke = await loadInvoke();
+        return invoke<AppSnapshot>("refresh_window_candidates");
       },
       async setThemePreference(theme) {
         const invoke = await loadInvoke();
@@ -61,6 +76,33 @@ async function loadInvoke() {
 
 function createMockDesktopClient(): DesktopClient {
   return {
+    async attachWindow(windowId, preset) {
+      const snapshot = readSnapshot();
+      const candidate = snapshot.windowCandidates.find((entry) => entry.windowId === windowId);
+
+      if (!candidate) {
+        throw new Error(`No mock window found for ${windowId}.`);
+      }
+
+      snapshot.lens = {
+        activePreset: preset,
+        activeTarget: candidate,
+        backendLabel: "Mock transform backend",
+        status: snapshot.diagnostics.suspended ? "suspended" : "attached",
+        summary:
+          preset === "greyscaleInvert"
+            ? `Mock lens attached to ${candidate.title}.`
+            : `${preset} is not wired in the browser preview.`,
+      };
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "mock-runtime",
+        message: `attached ${preset} to ${candidate.title}`,
+      });
+      writeSnapshot(snapshot);
+      return snapshot;
+    },
     async appendFrontendLog(level, source, message) {
       const snapshot = readSnapshot();
       snapshot.diagnostics.recentEvents.unshift({
@@ -86,6 +128,26 @@ function createMockDesktopClient(): DesktopClient {
 
       return snapshot;
     },
+    async detachLens() {
+      const snapshot = readSnapshot();
+      snapshot.lens = {
+        activePreset: null,
+        activeTarget: null,
+        backendLabel: "Mock transform backend",
+        status: snapshot.diagnostics.suspended ? "suspended" : "detached",
+        summary: snapshot.diagnostics.suspended
+          ? "Lens suspended with no active target."
+          : "No native window is attached in the browser preview.",
+      };
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "mock-runtime",
+        message: "lens detached from mock target",
+      });
+      writeSnapshot(snapshot);
+      return snapshot;
+    },
     async getDebugReport() {
       return JSON.stringify(readSnapshot(), null, 2);
     },
@@ -98,6 +160,18 @@ function createMockDesktopClient(): DesktopClient {
         message: "log directory open request ignored in browser preview",
       });
       writeSnapshot(snapshot);
+    },
+    async refreshWindowCandidates() {
+      const snapshot = readSnapshot();
+      snapshot.windowCandidates = defaultWindowCandidates();
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "debug",
+        source: "mock-runtime",
+        message: "refreshed mock window list",
+      });
+      writeSnapshot(snapshot);
+      return snapshot;
     },
     async setThemePreference(theme) {
       const snapshot = readSnapshot();
@@ -114,6 +188,21 @@ function createMockDesktopClient(): DesktopClient {
     async toggleSuspend() {
       const snapshot = readSnapshot();
       snapshot.diagnostics.suspended = !snapshot.diagnostics.suspended;
+      snapshot.lens.status =
+        snapshot.diagnostics.suspended && snapshot.lens.activeTarget
+          ? "suspended"
+          : snapshot.lens.activeTarget
+            ? "attached"
+            : snapshot.diagnostics.suspended
+              ? "suspended"
+              : "detached";
+      snapshot.lens.summary = snapshot.diagnostics.suspended
+        ? snapshot.lens.activeTarget
+          ? `Lens suspended while ${snapshot.lens.activeTarget.title} remains attached.`
+          : "Lens output suspended."
+        : snapshot.lens.activeTarget
+          ? `Mock lens attached to ${snapshot.lens.activeTarget.title}.`
+          : "No native window is attached in the browser preview.";
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "info",
@@ -178,8 +267,8 @@ function defaultSnapshot(): AppSnapshot {
         capability(
           "windowPicker",
           "Window picker",
-          "unsupported",
-          "Browser preview intentionally disables native window attachment."
+          "experimental",
+          "Browser preview simulates native window attachment with a mock window list."
         ),
         capability(
           "tintBackend",
@@ -190,8 +279,8 @@ function defaultSnapshot(): AppSnapshot {
         capability(
           "magnificationBackend",
           "Magnification transform",
-          "experimental",
-          "The product plan still spikes the Magnification API early before promoting it."
+          "available",
+          "Mock preview keeps Greyscale Invert in the shared contract while native validation happens on Windows."
         ),
         capability(
           "captureBackend",
@@ -207,6 +296,14 @@ function defaultSnapshot(): AppSnapshot {
         ),
       ],
     },
+    lens: {
+      activePreset: null,
+      activeTarget: null,
+      backendLabel: "Mock transform backend",
+      status: "detached",
+      summary: "No native window is attached in the browser preview.",
+    },
+    windowCandidates: defaultWindowCandidates(),
   };
 }
 
@@ -226,4 +323,27 @@ function preset(
   summary: string
 ) {
   return { id, label, family, summary };
+}
+
+function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
+  return [
+    {
+      windowId: "0x00010001",
+      title: "IRPF 2026 - Declaracao",
+      executablePath: "C:\\Program Files\\IRPF\\irpf.exe",
+      processId: 4720,
+      windowClass: "SunAwtFrame",
+      bounds: { left: 128, top: 96, width: 1160, height: 820 },
+      isForeground: true,
+    },
+    {
+      windowId: "0x00010002",
+      title: "Bloco de Notas",
+      executablePath: "C:\\Windows\\System32\\notepad.exe",
+      processId: 8640,
+      windowClass: "Notepad",
+      bounds: { left: 1440, top: 128, width: 760, height: 640 },
+      isForeground: false,
+    },
+  ];
 }
