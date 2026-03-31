@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 pub const APP_NAME: &str = "GlareMute";
 pub const SETTINGS_FILE_NAME: &str = "settings.json";
@@ -22,12 +22,11 @@ pub enum EffectFamily {
     Transform,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VisualPreset {
-    #[serde(alias = "darken")]
-    Dark,
     WarmDim,
+    Invert,
     GreyscaleInvert,
 }
 
@@ -82,7 +81,6 @@ pub struct ProfileRule {
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
     pub theme_preference: ThemePreference,
-    pub panic_hotkey: String,
     #[serde(default = "default_apply_to_related_windows")]
     pub apply_to_related_windows: bool,
     pub suspend_on_startup: bool,
@@ -183,7 +181,7 @@ pub struct AppSnapshot {
 
 impl Default for VisualPreset {
     fn default() -> Self {
-        Self::Dark
+        Self::GreyscaleInvert
     }
 }
 
@@ -191,10 +189,30 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme_preference: ThemePreference::System,
-            panic_hotkey: "Ctrl+Shift+F8".to_string(),
             apply_to_related_windows: default_apply_to_related_windows(),
             suspend_on_startup: false,
             profiles: Vec::new(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for VisualPreset {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        match raw.as_str() {
+            "warmDim" => Ok(Self::WarmDim),
+            "invert" => Ok(Self::Invert),
+            "greyscaleInvert" => Ok(Self::GreyscaleInvert),
+            // Legacy faux-dark values are intentionally migrated to the stable
+            // greyscale path instead of reviving the abandoned dark-mode claim.
+            "dark" | "darken" => Ok(Self::GreyscaleInvert),
+            other => Err(serde::de::Error::unknown_variant(
+                other,
+                &["warmDim", "invert", "greyscaleInvert"],
+            )),
         }
     }
 }
@@ -206,10 +224,11 @@ fn default_apply_to_related_windows() -> bool {
 pub fn default_preset_catalog() -> Vec<PresetDefinition> {
     vec![
         PresetDefinition {
-            id: VisualPreset::Dark,
-            label: "Dark".to_string(),
+            id: VisualPreset::Invert,
+            label: "Invert".to_string(),
             family: EffectFamily::Transform,
-            summary: "A cooler dark treatment inspired by Windows dark surfaces.".to_string(),
+            summary: "A full-color invert for apps where non-grey color cues still matter."
+                .to_string(),
         },
         PresetDefinition {
             id: VisualPreset::WarmDim,
@@ -236,7 +255,6 @@ mod tests {
         let settings = AppSettings::default();
 
         assert_eq!(settings.theme_preference, ThemePreference::System);
-        assert_eq!(settings.panic_hotkey, "Ctrl+Shift+F8");
         assert!(settings.apply_to_related_windows);
         assert!(settings.profiles.is_empty());
     }
@@ -246,7 +264,6 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(
             r#"{
                 "themePreference": "system",
-                "panicHotkey": "Ctrl+Shift+F8",
                 "suspendOnStartup": false,
                 "profiles": []
             }"#,
@@ -257,11 +274,22 @@ mod tests {
     }
 
     #[test]
+    fn legacy_dark_values_migrate_to_greyscale_invert() {
+        let dark: VisualPreset =
+            serde_json::from_str("\"dark\"").expect("deserialize legacy dark preset");
+        let darken: VisualPreset =
+            serde_json::from_str("\"darken\"").expect("deserialize legacy darken preset");
+
+        assert_eq!(dark, VisualPreset::GreyscaleInvert);
+        assert_eq!(darken, VisualPreset::GreyscaleInvert);
+    }
+
+    #[test]
     fn preset_catalog_is_stable() {
         let presets = default_preset_catalog();
 
         assert_eq!(presets.len(), 3);
-        assert_eq!(presets[0].id, VisualPreset::Dark);
+        assert_eq!(presets[0].id, VisualPreset::Invert);
         assert_eq!(presets[2].family, EffectFamily::Transform);
     }
 

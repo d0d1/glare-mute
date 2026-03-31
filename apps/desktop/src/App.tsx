@@ -3,8 +3,6 @@ import { startTransition, useEffect, useState } from "react";
 import "./App.css";
 import type {
   AppSnapshot,
-  CapabilityDescriptor,
-  CapabilityStatus,
   PresetDefinition,
   RuntimeEvent,
   ThemePreference,
@@ -19,8 +17,8 @@ import {
   watchSystemTheme,
 } from "./lib/theme";
 
-type BusyAction = "apply" | "copy" | "logs" | "pause" | "settings" | "turnOff" | null;
-type StatusTone = CapabilityStatus | "neutral";
+type BusyAction = "apply" | "copy" | "logs" | "settings" | "turnOff" | null;
+type StatusTone = "available" | "experimental" | "planned" | "unsupported" | "neutral";
 
 const DEFAULT_PRESET: VisualPreset = "greyscaleInvert";
 const THEME_OPTIONS: Array<{ hint: string; label: string; value: ThemePreference }> = [
@@ -172,12 +170,7 @@ function App() {
   );
   const selectedPresetDefinition =
     effectChoices.find((preset) => preset.id === selectedPreset) ?? null;
-  const selectedPresetCapability = snapshot
-    ? presetCapability(snapshot.platform.capabilities, selectedPreset)
-    : null;
-  const selectedPresetStatus = selectedPresetCapability?.status ?? "unsupported";
-  const canAttachSelectedWindow =
-    Boolean(selectedWindow) && selectedPresetStatus === "available" && busyAction !== "apply";
+  const canAttachSelectedWindow = Boolean(selectedWindow) && busyAction !== "apply";
 
   async function updateSnapshot(task: () => Promise<AppSnapshot>, busy: BusyAction) {
     setBusyAction(busy);
@@ -207,10 +200,6 @@ function App() {
     }
 
     await updateSnapshot(() => desktopClient.setApplyToRelatedWindows(enabled), "settings");
-  }
-
-  async function handleSuspendToggle() {
-    await updateSnapshot(() => desktopClient.toggleSuspend(), "pause");
   }
 
   async function handleAttachSelectedWindow() {
@@ -351,14 +340,7 @@ function App() {
               </select>
               {selectedPresetDefinition ? (
                 <div className="field-note">
-                  <StatusChip
-                    label={presetAvailabilityLabel(selectedPresetStatus)}
-                    status={statusTone(selectedPresetStatus)}
-                  />
                   <p className="body-copy">{selectedPresetDefinition.summary}</p>
-                  {selectedPresetStatus !== "available" ? (
-                    <p className="body-copy muted-copy">{selectedPresetCapability?.summary}</p>
-                  ) : null}
                 </div>
               ) : null}
             </section>
@@ -370,29 +352,10 @@ function App() {
                 onClick={() => void handleAttachSelectedWindow()}
                 type="button"
               >
-                {applyButtonLabel(
-                  busyAction,
-                  selectedPresetDefinition,
-                  selectedPresetStatus,
-                  selectedWindow
-                )}
+                {applyButtonLabel(busyAction, selectedPresetDefinition, selectedWindow)}
               </button>
-              <p className="body-copy action-hint">
-                {applyHint(selectedWindow, selectedPresetCapability, selectedPresetStatus)}
-              </p>
+              <p className="body-copy action-hint">{applyHint(selectedWindow)}</p>
               <div className="button-row">
-                <button
-                  className="button button-secondary"
-                  disabled={!activeTarget || busyAction === "pause"}
-                  onClick={() => void handleSuspendToggle()}
-                  type="button"
-                >
-                  {busyAction === "pause"
-                    ? "Working…"
-                    : snapshot.diagnostics.suspended
-                      ? "Resume"
-                      : "Pause"}
-                </button>
                 <button
                   className="button button-secondary"
                   disabled={!activeTarget || busyAction === "turnOff"}
@@ -406,10 +369,6 @@ function App() {
                 <div>
                   <dt>Window</dt>
                   <dd>{activeTarget?.title ?? selectedWindow?.title ?? "No window selected"}</dd>
-                </div>
-                <div>
-                  <dt>Shortcut</dt>
-                  <dd>{snapshot.settings.panicHotkey}</dd>
                 </div>
               </dl>
             </section>
@@ -695,32 +654,9 @@ function filterWindowCandidates(candidates: WindowDescriptor[], query: string) {
   });
 }
 
-function presetCapability(capabilities: CapabilityDescriptor[], preset: VisualPreset) {
-  switch (preset) {
-    case "dark":
-      return capabilityById(capabilities, "magnificationBackend");
-    case "warmDim":
-      return capabilityById(capabilities, "tintBackend");
-    case "greyscaleInvert":
-      return capabilityById(capabilities, "magnificationBackend");
-  }
-}
-
-function capabilityById(capabilities: CapabilityDescriptor[], id: string): CapabilityDescriptor {
-  return (
-    capabilities.find((capability) => capability.id === id) ?? {
-      id,
-      label: id,
-      status: "unsupported",
-      summary: "This capability is not exposed by the current runtime.",
-    }
-  );
-}
-
 function applyButtonLabel(
   busyAction: BusyAction,
   preset: PresetDefinition | null,
-  presetStatus: CapabilityStatus,
   selectedWindow: WindowDescriptor | null
 ) {
   if (busyAction === "apply") {
@@ -731,28 +667,20 @@ function applyButtonLabel(
     return "Choose a window";
   }
 
-  if (!preset || presetStatus !== "available") {
-    return `${preset?.label ?? "Effect"} not available yet`;
+  if (!preset) {
+    return "Choose an effect";
   }
 
   return `Apply ${preset.label}`;
 }
 
-function applyHint(
-  selectedWindow: WindowDescriptor | null,
-  presetCapability: CapabilityDescriptor | null,
-  presetStatus: CapabilityStatus
-) {
+function applyHint(selectedWindow: WindowDescriptor | null) {
   if (!selectedWindow) {
     return "Select a window to continue.";
   }
 
   if (selectedWindow.attachmentState === "minimized") {
     return "This window is minimized. The effect will appear when it is back on screen.";
-  }
-
-  if (presetStatus !== "available") {
-    return presetCapability?.summary ?? "This effect is not available in the current build.";
   }
 
   return "Ready to apply the selected effect to this window.";
@@ -784,9 +712,9 @@ function effectStatusLabel(status: AppSnapshot["lens"]["status"]) {
       return "Pending";
     case "attached":
       return "Applied";
-    case "suspended":
-      return "Paused";
     case "detached":
+      return "Off";
+    case "suspended":
       return "Off";
   }
 }
@@ -803,14 +731,14 @@ function effectStatusChip(status: AppSnapshot["lens"]["status"]): StatusTone {
       return "neutral";
     case "attached":
       return "available";
-    case "suspended":
-      return "neutral";
     case "detached":
+      return "neutral";
+    case "suspended":
       return "neutral";
   }
 }
 
-function levelToStatus(level: RuntimeEvent["level"]): CapabilityStatus {
+function levelToStatus(level: RuntimeEvent["level"]): StatusTone {
   switch (level) {
     case "error":
       return "unsupported";
@@ -821,19 +749,6 @@ function levelToStatus(level: RuntimeEvent["level"]): CapabilityStatus {
       return "planned";
     case "info":
       return "available";
-  }
-}
-
-function presetAvailabilityLabel(status: CapabilityStatus) {
-  switch (status) {
-    case "available":
-      return "Available";
-    case "experimental":
-      return "Experimental";
-    case "planned":
-      return "Not available yet";
-    case "unsupported":
-      return "Unavailable";
   }
 }
 
@@ -872,31 +787,17 @@ function windowStateLabel(candidate: WindowDescriptor) {
   }
 }
 
-function statusTone(status: CapabilityStatus): StatusTone {
-  switch (status) {
-    case "available":
-    case "experimental":
-    case "planned":
-    case "unsupported":
-      return status;
-  }
-}
-
 function visibleEffectPresets(presets: PresetDefinition[]) {
   return presets.filter((preset) => preset.id !== "warmDim");
 }
 
 function windowLensStatus(
   candidate: WindowDescriptor,
-  snapshot: AppSnapshot,
+  _snapshot: AppSnapshot,
   coveredWindowIds: Set<string>
 ): AppSnapshot["lens"]["status"] | null {
   if (!coveredWindowIds.has(candidate.windowId)) {
     return null;
-  }
-
-  if (snapshot.lens.status === "suspended") {
-    return "suspended";
   }
 
   return candidate.attachmentState === "minimized" ? "pending" : "attached";
@@ -909,7 +810,7 @@ function windowEffectLabel(status: AppSnapshot["lens"]["status"]) {
     case "attached":
       return "Applied";
     case "suspended":
-      return "Paused";
+      return "Applied";
     case "detached":
       return "Off";
   }
@@ -920,8 +821,9 @@ function windowEffectTone(status: AppSnapshot["lens"]["status"]): StatusTone {
     case "attached":
       return "available";
     case "pending":
-    case "suspended":
       return "neutral";
+    case "suspended":
+      return "available";
     case "detached":
       return "neutral";
   }

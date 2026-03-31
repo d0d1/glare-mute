@@ -5,7 +5,7 @@ The app is tray-first, but the main window still matters because that is where d
 ## Tray shell responsibilities
 
 - expose the app even when the main window is hidden
-- provide a fast suspend path
+- provide fast access back to the current effect session
 - reopen the main window without rebuilding state
 - stay single-instance
 

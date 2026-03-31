@@ -43,8 +43,7 @@ pub fn run() {
             commands::open_logs_directory,
             commands::refresh_window_candidates,
             commands::set_apply_to_related_windows,
-            commands::set_theme_preference,
-            commands::toggle_suspend
+            commands::set_theme_preference
         ])
         .run(tauri::generate_context!())
         .expect("error while running GlareMute desktop application");

@@ -10,7 +10,7 @@ type(scope?): subject
 
 Examples:
 
-- `feat(shell): add tray-based suspend toggle`
+- `feat(shell): add tray-based effect controls`
 - `fix(theme): persist system preference correctly`
 - `docs(debugging): document log file locations`
 

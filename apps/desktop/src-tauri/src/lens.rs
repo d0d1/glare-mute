@@ -32,7 +32,11 @@ impl LensController {
             .set_apply_to_related_windows(apply_to_related_windows)
     }
 
+    #[allow(dead_code)]
     pub fn set_suspended(&self, suspended: bool) -> Result<LensSnapshot> {
+        // Pause remains internal only for startup/debug flows. The product UI no
+        // longer exposes it because users had no meaningful distinction from
+        // turning the current effect off.
         self.inner.set_suspended(suspended)
     }
 
@@ -99,6 +103,7 @@ mod platform {
                 .clone())
         }
 
+        #[allow(dead_code)]
         pub fn set_suspended(&self, suspended: bool) -> Result<LensSnapshot> {
             let mut snapshot = self.snapshot.lock().expect("preview lens lock poisoned");
             snapshot.status = if suspended {
@@ -211,7 +216,7 @@ mod platform {
         }
 
         pub fn attach_window(&self, window_id: &str, preset: VisualPreset) -> Result<LensSnapshot> {
-            if !matches!(preset, VisualPreset::GreyscaleInvert | VisualPreset::Dark) {
+            if !matches!(preset, VisualPreset::GreyscaleInvert | VisualPreset::Invert) {
                 bail!("This effect is not implemented in the native Windows path right now.")
             }
 
@@ -1227,18 +1232,18 @@ mod platform {
         }
     }
 
-    fn dark_effect() -> MAGCOLOREFFECT {
+    fn invert_effect() -> MAGCOLOREFFECT {
         MAGCOLOREFFECT {
             transform: [
-                -0.17, -0.31, -0.08, 0.0, 0.0, -0.18, -0.36, -0.10, 0.0, 0.0, -0.20, -0.38, -0.12,
-                0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.94, 0.96, 0.98, 0.0, 1.0,
+                -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0,
             ],
         }
     }
 
     fn effect_for_preset(preset: VisualPreset) -> Result<MAGCOLOREFFECT> {
         match preset {
-            VisualPreset::Dark => Ok(dark_effect()),
+            VisualPreset::Invert => Ok(invert_effect()),
             VisualPreset::GreyscaleInvert => Ok(greyscale_invert_effect()),
             VisualPreset::WarmDim => {
                 bail!("Warm Dim is not implemented in the native Windows path right now.")
@@ -1248,7 +1253,7 @@ mod platform {
 
     fn preset_label(preset: Option<VisualPreset>) -> &'static str {
         match preset.unwrap_or(VisualPreset::GreyscaleInvert) {
-            VisualPreset::Dark => "Dark",
+            VisualPreset::Invert => "Invert",
             VisualPreset::WarmDim => "Warm Dim",
             VisualPreset::GreyscaleInvert => "Greyscale Invert",
         }

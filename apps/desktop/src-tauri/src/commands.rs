@@ -57,11 +57,6 @@ pub fn set_apply_to_related_windows(
 }
 
 #[tauri::command]
-pub fn toggle_suspend(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
-    state.toggle_suspend().map_err(|error| error.to_string())
-}
-
-#[tauri::command]
 pub fn open_logs_directory(app: AppHandle) -> Result<(), String> {
     let log_directory = app
         .path()

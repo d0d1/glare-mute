@@ -7,7 +7,6 @@ use tracing::warn;
 use crate::state::ManagedState;
 
 const MENU_OPEN: &str = "open";
-const MENU_TOGGLE_SUSPEND: &str = "toggle-suspend";
 const MENU_DETACH_LENS: &str = "detach-lens";
 const MENU_OPEN_LOGS: &str = "open-logs";
 const MENU_QUIT: &str = "quit";
@@ -16,13 +15,6 @@ const TRAY_ICON_PNG: &[u8] = include_bytes!("../icons/tray-icon.png");
 
 pub fn build_tray(app: &App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, MENU_OPEN, "Open GlareMute", true, None::<&str>)?;
-    let suspend = MenuItem::with_id(
-        app,
-        MENU_TOGGLE_SUSPEND,
-        "Pause or resume",
-        true,
-        None::<&str>,
-    )?;
     let detach = MenuItem::with_id(app, MENU_DETACH_LENS, "Turn off effect", true, None::<&str>)?;
     let open_logs = MenuItem::with_id(
         app,
@@ -33,10 +25,7 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
     )?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(
-        app,
-        &[&open, &suspend, &detach, &open_logs, &separator, &quit],
-    )?;
+    let menu = Menu::with_items(app, &[&open, &detach, &open_logs, &separator, &quit])?;
 
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
@@ -102,28 +91,6 @@ fn handle_menu_event(app: &AppHandle, event_id: &str) {
     match event_id {
         MENU_OPEN => {
             let _ = show_main_window(app);
-        }
-        MENU_TOGGLE_SUSPEND => {
-            let state = app.state::<ManagedState>();
-            match state.toggle_suspend() {
-                Ok(snapshot) => {
-                    state.record_event(
-                        glare_mute_core::RuntimeEventLevel::Debug,
-                        "tray".to_string(),
-                        format!(
-                            "tray toggled paused state to {}",
-                            snapshot.diagnostics.suspended
-                        ),
-                    );
-                }
-                Err(error) => {
-                    state.record_event(
-                        glare_mute_core::RuntimeEventLevel::Error,
-                        "tray".to_string(),
-                        format!("tray failed to toggle paused state: {error}"),
-                    );
-                }
-            }
         }
         MENU_DETACH_LENS => {
             let state = app.state::<ManagedState>();

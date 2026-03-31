@@ -7,7 +7,7 @@ import type {
 } from "./contracts";
 
 const STORAGE_KEY = "glaremute:preview-snapshot";
-type LegacyVisualPreset = VisualPreset | "darken";
+type LegacyVisualPreset = VisualPreset | "dark" | "darken";
 
 declare global {
   interface Window {
@@ -25,7 +25,6 @@ interface DesktopClient {
   refreshWindowCandidates(): Promise<AppSnapshot>;
   setApplyToRelatedWindows(enabled: boolean): Promise<AppSnapshot>;
   setThemePreference(theme: ThemePreference): Promise<AppSnapshot>;
-  toggleSuspend(): Promise<AppSnapshot>;
 }
 
 export const desktopClient: DesktopClient = isTauriRuntime()
@@ -66,10 +65,6 @@ export const desktopClient: DesktopClient = isTauriRuntime()
         const invoke = await loadInvoke();
         return invoke<AppSnapshot>("set_theme_preference", { theme });
       },
-      async toggleSuspend() {
-        const invoke = await loadInvoke();
-        return invoke<AppSnapshot>("toggle_suspend");
-      },
     }
   : createMockDesktopClient();
 
@@ -95,12 +90,12 @@ function createMockDesktopClient(): DesktopClient {
       if (!candidate) {
         throw new Error(`No mock window found for ${windowId}.`);
       }
-      if (!["greyscaleInvert", "dark"].includes(preset)) {
+      if (!["greyscaleInvert", "invert"].includes(preset)) {
         throw new Error(`${preset} is not available in the current build.`);
       }
 
       const coveredTargets = relatedWindowTargets(snapshot, candidate);
-      const status = mockLensStatus(snapshot.diagnostics.suspended, coveredTargets);
+      const status = mockLensStatus(coveredTargets);
       snapshot.lens = {
         activePreset: preset,
         activeTarget: candidate,
@@ -158,7 +153,6 @@ function createMockDesktopClient(): DesktopClient {
         status: "detached",
         summary: "No effect is active in the browser preview.",
       };
-      snapshot.diagnostics.suspended = false;
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "info",
@@ -196,7 +190,7 @@ function createMockDesktopClient(): DesktopClient {
         snapshot.lens.activeTarget = nextTarget;
         if (nextTarget) {
           const coveredTargets = relatedWindowTargets(snapshot, nextTarget);
-          const status = mockLensStatus(snapshot.diagnostics.suspended, coveredTargets);
+          const status = mockLensStatus(coveredTargets);
           snapshot.lens.coveredTargets = coveredTargets;
           snapshot.lens.status = status;
           snapshot.lens.summary = mockLensSummary(
@@ -211,10 +205,8 @@ function createMockDesktopClient(): DesktopClient {
             activeTarget: null,
             coveredTargets: [],
             backendLabel: snapshot.lens.backendLabel,
-            status: snapshot.diagnostics.suspended ? "suspended" : "detached",
-            summary: snapshot.diagnostics.suspended
-              ? "The current effect is paused."
-              : "No effect is active in the browser preview.",
+            status: "detached",
+            summary: "No effect is active in the browser preview.",
           };
         }
       }
@@ -232,7 +224,7 @@ function createMockDesktopClient(): DesktopClient {
       });
       if (snapshot.lens.activeTarget) {
         const coveredTargets = relatedWindowTargets(snapshot, snapshot.lens.activeTarget);
-        const status = mockLensStatus(snapshot.diagnostics.suspended, coveredTargets);
+        const status = mockLensStatus(coveredTargets);
         snapshot.lens.coveredTargets = coveredTargets;
         snapshot.lens.status = status;
         snapshot.lens.summary = mockLensSummary(
@@ -253,33 +245,6 @@ function createMockDesktopClient(): DesktopClient {
         level: "info",
         source: "mock-runtime",
         message: `theme preference updated to ${theme}`,
-      });
-      writeSnapshot(snapshot);
-      return snapshot;
-    },
-    async toggleSuspend() {
-      const snapshot = readSnapshot();
-      snapshot.diagnostics.suspended = !snapshot.diagnostics.suspended;
-      snapshot.lens.status = snapshot.lens.activeTarget
-        ? mockLensStatus(snapshot.diagnostics.suspended, snapshot.lens.coveredTargets)
-        : snapshot.diagnostics.suspended
-          ? "suspended"
-          : "detached";
-      snapshot.lens.summary = snapshot.lens.activeTarget
-        ? mockLensSummary(
-            snapshot.lens.activePreset ?? "greyscaleInvert",
-            snapshot.lens.activeTarget,
-            snapshot.lens.coveredTargets,
-            snapshot.lens.status
-          )
-        : snapshot.diagnostics.suspended
-          ? "The current effect is paused."
-          : "No effect is active in the browser preview.";
-      snapshot.diagnostics.recentEvents.unshift({
-        timestamp: new Date().toISOString(),
-        level: "info",
-        source: "mock-runtime",
-        message: snapshot.diagnostics.suspended ? "lens output suspended" : "lens output resumed",
       });
       writeSnapshot(snapshot);
       return snapshot;
@@ -310,7 +275,7 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
     presets: snapshot.presets.map((preset) => ({
       ...preset,
       id: normalizePersistedPresetId(preset.id),
-      label: normalizePersistedPresetId(preset.id) === "dark" ? "Dark" : preset.label,
+      label: normalizePersistedPresetId(preset.id) === "invert" ? "Invert" : preset.label,
     })),
     settings: {
       ...snapshot.settings,
@@ -333,8 +298,8 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
 }
 
 function normalizePersistedPresetId(preset: LegacyVisualPreset): VisualPreset {
-  if (preset === "darken") {
-    return "dark";
+  if (preset === "dark" || preset === "darken") {
+    return "greyscaleInvert";
   }
 
   return preset;
@@ -351,18 +316,12 @@ function defaultSnapshot(): AppSnapshot {
     devMode: import.meta.env.DEV,
     settings: {
       themePreference: "system",
-      panicHotkey: "Ctrl+Shift+F8",
       applyToRelatedWindows: true,
       suspendOnStartup: false,
       profiles: [],
     },
     presets: [
-      preset(
-        "dark",
-        "Dark",
-        "transform",
-        "A cooler dark treatment inspired by Windows dark surfaces."
-      ),
+      preset("invert", "Invert", "transform", "A full-color invert that preserves non-grey cues."),
       preset("warmDim", "Warm Dim", "tint", "An amber-forward dim preset tuned for glare."),
       preset(
         "greyscaleInvert",
@@ -400,7 +359,7 @@ function defaultSnapshot(): AppSnapshot {
           "magnificationBackend",
           "Magnification transform",
           "available",
-          "Mock preview keeps Dark and Greyscale Invert in the shared contract while native validation happens on Windows, including related-window coverage in the shared session model."
+          "Mock preview keeps Invert and Greyscale Invert in the shared contract while native validation happens on Windows, including related-window coverage in the shared session model."
         ),
         capability(
           "captureBackend",
@@ -452,7 +411,8 @@ function mockLensSummary(
   coveredTargets: AppSnapshot["lens"]["coveredTargets"],
   status: AppSnapshot["lens"]["status"]
 ) {
-  const label = preset === "dark" ? "Dark" : preset === "warmDim" ? "Warm Dim" : "Greyscale Invert";
+  const label =
+    preset === "invert" ? "Invert" : preset === "warmDim" ? "Warm Dim" : "Greyscale Invert";
   const visibleCount = coveredTargets.filter(
     (target) => target.attachmentState === "available"
   ).length;
@@ -468,24 +428,17 @@ function mockLensSummary(
         ? `${label} is active on ${Math.max(visibleCount, 1)} windows from the same app.`
         : `${label} is active on ${activeTarget?.title ?? "the selected window"}.`;
     case "suspended":
-      return coveredCount > 1
-        ? `${label} is paused for ${coveredCount} windows from the same app.`
-        : `${label} is paused for ${activeTarget?.title ?? "the selected window"}.`;
+      return "The current effect is paused in the browser preview.";
     case "detached":
       return "No effect is active in the browser preview.";
   }
 }
 
 function mockLensStatus(
-  suspended: boolean,
   coveredTargets: AppSnapshot["lens"]["coveredTargets"]
 ): AppSnapshot["lens"]["status"] {
   if (coveredTargets.length === 0) {
-    return suspended ? "suspended" : "detached";
-  }
-
-  if (suspended) {
-    return "suspended";
+    return "detached";
   }
 
   return coveredTargets.some((target) => target.attachmentState === "available")

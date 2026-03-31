@@ -19,6 +19,7 @@
 
 - [ADR 0001: Tauri + Rust + React](./adr/0001-tauri-rust-react.md)
 - [ADR 0002: Hybrid lens backends](./adr/0002-hybrid-lens-backends.md)
+- [ADR 0003: Effect surface honesty](./adr/0003-effect-surface-honesty.md)
 
 ## Contributing
 

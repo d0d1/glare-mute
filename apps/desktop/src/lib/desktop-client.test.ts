@@ -21,14 +21,6 @@ describe("desktopClient mock runtime", () => {
     expect(nextSnapshot.settings.themePreference).toBe("light");
   });
 
-  it("toggles suspended state", async () => {
-    await desktopClient.bootstrapState();
-    const nextSnapshot = await desktopClient.toggleSuspend();
-
-    expect(nextSnapshot.diagnostics.suspended).toBe(true);
-    expect(nextSnapshot.lens.status).toBe("suspended");
-  });
-
   it("attaches the mock greyscale lens to a listed window", async () => {
     const snapshot = await desktopClient.bootstrapState();
     const candidate = snapshot.windowCandidates[0];
@@ -51,10 +43,10 @@ describe("desktopClient mock runtime", () => {
       throw new Error("Expected a minimized mock window.");
     }
 
-    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "dark");
+    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "invert");
 
     expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
-    expect(nextSnapshot.lens.activePreset).toBe("dark");
+    expect(nextSnapshot.lens.activePreset).toBe("invert");
     expect(nextSnapshot.lens.status).toBe("pending");
   });
 

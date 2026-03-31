@@ -8,7 +8,6 @@ The agreed v1 backend direction is hybrid, not monolithic.
 
 This is the zero-lag path for:
 
-- Dark
 - Warm Dim
 - future glare-reduction presets that do not need pixel remapping
 
@@ -42,8 +41,8 @@ It is still treated as experimental until real latency and compatibility measure
 Today the Windows desktop shell uses:
 
 - explicit top-level window enumeration as the picker
-- Magnification API for the first native `Greyscale Invert` implementation
-- suspend/detach controls in both the dashboard and tray
+- Magnification API for the first native `Greyscale Invert` and `Invert` implementations
+- a single user-facing `Turn off` action instead of separate pause/off controls
 
 Tint presets remain in the contract, but they are not the first implemented native backend.
 

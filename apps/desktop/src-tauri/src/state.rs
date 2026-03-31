@@ -30,6 +30,9 @@ struct SettingsStore {
 }
 
 struct DiagnosticsState {
+    // Suspend remains an internal runtime concept for startup/debug bookkeeping,
+    // but the product UI no longer exposes Pause because users had no meaningful
+    // distinction between Pause and Turn off in the current workflow.
     suspended: bool,
     recent_events: VecDeque<RuntimeEvent>,
 }
@@ -116,28 +119,6 @@ impl ManagedState {
         );
 
         self.snapshot_with_settings(snapshot)
-    }
-
-    pub fn toggle_suspend(&self) -> Result<AppSnapshot> {
-        let new_state = {
-            let mut diagnostics = self.diagnostics.lock().expect("diagnostics lock poisoned");
-            diagnostics.suspended = !diagnostics.suspended;
-            diagnostics.suspended
-        };
-
-        self.lens.set_suspended(new_state)?;
-
-        self.record_event(
-            RuntimeEventLevel::Info,
-            "session".to_string(),
-            if new_state {
-                "lens output suspended".to_string()
-            } else {
-                "lens output resumed".to_string()
-            },
-        );
-
-        self.snapshot()
     }
 
     pub fn refresh_window_candidates(&self) -> Result<AppSnapshot> {
