@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
-pub const APP_NAME: &str = "GlareMute";
+pub const APP_NAME: &str = "Glare mute";
 pub const SETTINGS_FILE_NAME: &str = "settings.json";
 pub const LOG_FILE_NAME: &str = "glare-mute.log";
 pub const RECENT_EVENT_LIMIT: usize = 200;
@@ -13,6 +13,17 @@ pub enum ThemePreference {
     Light,
     Dark,
     GreyscaleInvert,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub enum AppLanguage {
+    #[default]
+    #[serde(rename = "en")]
+    En,
+    #[serde(rename = "pt-BR")]
+    PtBr,
+    #[serde(rename = "es")]
+    Es,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -80,6 +91,8 @@ pub struct ProfileRule {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
+    #[serde(default = "default_app_language")]
+    pub language: AppLanguage,
     pub theme_preference: ThemePreference,
     #[serde(default = "default_apply_to_related_windows")]
     pub apply_to_related_windows: bool,
@@ -188,6 +201,7 @@ impl Default for VisualPreset {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            language: default_app_language(),
             theme_preference: ThemePreference::System,
             apply_to_related_windows: default_apply_to_related_windows(),
             suspend_on_startup: false,
@@ -219,6 +233,10 @@ impl<'de> Deserialize<'de> for VisualPreset {
 
 fn default_apply_to_related_windows() -> bool {
     true
+}
+
+fn default_app_language() -> AppLanguage {
+    AppLanguage::En
 }
 
 pub fn default_preset_catalog() -> Vec<PresetDefinition> {
@@ -254,6 +272,7 @@ mod tests {
     fn default_settings_favor_system_theme() {
         let settings = AppSettings::default();
 
+        assert_eq!(settings.language, AppLanguage::En);
         assert_eq!(settings.theme_preference, ThemePreference::System);
         assert!(settings.apply_to_related_windows);
         assert!(settings.profiles.is_empty());
@@ -271,6 +290,21 @@ mod tests {
         .expect("deserialize legacy settings");
 
         assert!(settings.apply_to_related_windows);
+    }
+
+    #[test]
+    fn legacy_settings_missing_language_default_to_english() {
+        let settings: AppSettings = serde_json::from_str(
+            r#"{
+                "themePreference": "system",
+                "applyToRelatedWindows": true,
+                "suspendOnStartup": false,
+                "profiles": []
+            }"#,
+        )
+        .expect("deserialize legacy settings");
+
+        assert_eq!(settings.language, AppLanguage::En);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use glare_mute_core::{AppSnapshot, RuntimeEventLevel, ThemePreference, VisualPreset};
+use glare_mute_core::{AppLanguage, AppSnapshot, RuntimeEventLevel, ThemePreference, VisualPreset};
 use tauri::{AppHandle, Manager, State, Theme};
 use tauri_plugin_opener::OpenerExt;
 
@@ -43,6 +43,16 @@ pub fn set_theme_preference(
     apply_theme_preference(&app, theme)?;
     state
         .set_theme_preference(theme)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_language(
+    state: State<'_, ManagedState>,
+    language: AppLanguage,
+) -> Result<AppSnapshot, String> {
+    state
+        .set_language(language)
         .map_err(|error| error.to_string())
 }
 

@@ -2,6 +2,7 @@ import { startTransition, useEffect, useState } from "react";
 
 import "./App.css";
 import type {
+  AppLanguage,
   AppSnapshot,
   PresetDefinition,
   RuntimeEvent,
@@ -10,6 +11,7 @@ import type {
   WindowDescriptor,
 } from "./lib/contracts";
 import { desktopClient } from "./lib/desktop-client";
+import { LANGUAGE_OPTIONS, type Messages, PRODUCT_NAME, getMessages } from "./lib/i18n";
 import {
   applyDocumentTheme,
   getSystemPrefersDark,
@@ -21,16 +23,6 @@ type BusyAction = "apply" | "copy" | "logs" | "settings" | "turnOff" | null;
 type StatusTone = "available" | "experimental" | "planned" | "unsupported" | "neutral";
 
 const DEFAULT_PRESET: VisualPreset = "greyscaleInvert";
-const THEME_OPTIONS: Array<{ hint: string; label: string; value: ThemePreference }> = [
-  { hint: "Follow the operating system theme.", label: "System", value: "system" },
-  { hint: "Force GlareMute into the lighter appearance.", label: "Light", value: "light" },
-  { hint: "Force GlareMute into the darker appearance.", label: "Dark", value: "dark" },
-  {
-    hint: "Use the native in-app greyscale invert appearance.",
-    label: "Greyscale Invert",
-    value: "greyscaleInvert",
-  },
-];
 
 function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
@@ -42,6 +34,8 @@ function App() {
   const [selectedPreset, setSelectedPreset] = useState<VisualPreset>(DEFAULT_PRESET);
   const [windowQuery, setWindowQuery] = useState("");
   const hasSnapshot = snapshot !== null;
+  const language: AppLanguage = snapshot?.settings.language ?? "en";
+  const messages = getMessages(language);
 
   useEffect(() => watchSystemTheme(setPrefersDark), []);
 
@@ -64,7 +58,7 @@ function App() {
           return;
         }
 
-        setErrorMessage(error instanceof Error ? error.message : "Failed to open GlareMute.");
+        setErrorMessage(error instanceof Error ? error.message : messages.openProductFailure);
       }
     }
 
@@ -72,7 +66,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [messages.openProductFailure]);
 
   const effectiveTheme = resolveEffectiveTheme(
     snapshot?.settings.themePreference ?? "system",
@@ -82,6 +76,10 @@ function App() {
   useEffect(() => {
     applyDocumentTheme(effectiveTheme);
   }, [effectiveTheme]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   useEffect(() => {
     if (!snapshot) {
@@ -113,6 +111,7 @@ function App() {
 
   const allWindowCandidates = snapshot?.windowCandidates ?? [];
   const effectChoices = visibleEffectPresets(snapshot?.presets ?? []);
+  const localizedEffectChoices = localizePresetDefinitions(effectChoices, messages);
   const filteredWindowCandidates = filterWindowCandidates(allWindowCandidates, windowQuery);
 
   useEffect(() => {
@@ -154,13 +153,13 @@ function App() {
         })
         .catch((error) => {
           setErrorMessage(
-            error instanceof Error ? error.message : "Failed to refresh the window list."
+            error instanceof Error ? error.message : messages.refreshWindowListFailure
           );
         });
     }, 2000);
 
     return () => window.clearInterval(interval);
-  }, [hasSnapshot]);
+  }, [hasSnapshot, messages.refreshWindowListFailure]);
 
   const selectedWindow =
     allWindowCandidates.find((candidate) => candidate.windowId === selectedWindowId) ?? null;
@@ -169,7 +168,8 @@ function App() {
     snapshot?.lens.coveredTargets.map((target) => target.windowId) ?? []
   );
   const selectedPresetDefinition =
-    effectChoices.find((preset) => preset.id === selectedPreset) ?? null;
+    localizedEffectChoices.find((preset) => preset.id === selectedPreset) ?? null;
+  const themeOptions = themeOptionsFor(messages);
   const canAttachSelectedWindow = Boolean(selectedWindow) && busyAction !== "apply";
 
   async function updateSnapshot(task: () => Promise<AppSnapshot>, busy: BusyAction) {
@@ -180,10 +180,18 @@ function App() {
       const nextSnapshot = await task();
       startTransition(() => setSnapshot(nextSnapshot));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unexpected desktop bridge error.");
+      setErrorMessage(error instanceof Error ? error.message : messages.unexpectedBridgeError);
     } finally {
       setBusyAction(null);
     }
+  }
+
+  async function handleLanguageChange(nextLanguage: AppLanguage) {
+    if (!snapshot || snapshot.settings.language === nextLanguage) {
+      return;
+    }
+
+    await updateSnapshot(() => desktopClient.setLanguage(nextLanguage), "settings");
   }
 
   async function handleThemeChange(nextTheme: ThemePreference) {
@@ -225,9 +233,7 @@ function App() {
       await desktopClient.openLogsDirectory();
       await desktopClient.appendFrontendLog("info", "ui", "log directory opened");
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to open the logs directory."
-      );
+      setErrorMessage(error instanceof Error ? error.message : messages.openLogsFailure);
     } finally {
       setBusyAction(null);
     }
@@ -243,7 +249,7 @@ function App() {
       setCopiedReport(true);
       window.setTimeout(() => setCopiedReport(false), 2400);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to copy the debug report.");
+      setErrorMessage(error instanceof Error ? error.message : messages.copyDebugReportFailure);
     } finally {
       setBusyAction(null);
     }
@@ -254,8 +260,8 @@ function App() {
       <div className="app-shell">
         <div className="app-frame loading-frame">
           <section className="loading-card">
-            <h1>GlareMute</h1>
-            <p className="body-copy">Opening workspace and loading the current window list.</p>
+            <h1>{PRODUCT_NAME}</h1>
+            <p className="body-copy">{messages.loadingMessage}</p>
           </section>
         </div>
       </div>
@@ -266,10 +272,8 @@ function App() {
     <div className="app-shell">
       <div className="app-frame">
         <header className="product-header">
-          <h1>GlareMute</h1>
-          <p className="app-subtitle">
-            Choose a window and apply an effect without changing the rest of the desktop.
-          </p>
+          <h1>{PRODUCT_NAME}</h1>
+          <p className="app-subtitle">{messages.appSubtitle}</p>
         </header>
 
         {errorMessage ? (
@@ -281,26 +285,27 @@ function App() {
         <main className="workflow-shell">
           <section className="workflow-pane window-pane">
             <PaneHeader
-              subtitle={windowListSubtitle(filteredWindowCandidates.length, windowQuery)}
-              title="Available windows"
+              subtitle={windowListSubtitle(messages, filteredWindowCandidates.length, windowQuery)}
+              title={messages.availableWindows}
             />
 
             <input
-              aria-label="Filter windows"
+              aria-label={messages.filterWindows}
               className="search-input"
               onChange={(event) => setWindowQuery(event.target.value)}
-              placeholder="Filter by title or app"
+              placeholder={messages.filterWindowsPlaceholder}
               type="search"
               value={windowQuery}
             />
 
             {filteredWindowCandidates.length > 0 ? (
-              <ul aria-label="Available windows" className="window-list">
+              <ul aria-label={messages.availableWindows} className="window-list">
                 {filteredWindowCandidates.map((candidate) => (
                   <WindowRow
                     candidate={candidate}
                     key={candidate.windowId}
-                    lensStatus={windowLensStatus(candidate, snapshot, coveredWindowIds)}
+                    lensStatus={windowLensStatus(candidate, coveredWindowIds)}
+                    messages={messages}
                     onSelect={() => setSelectedWindowId(candidate.windowId)}
                     selected={selectedWindowId === candidate.windowId}
                   />
@@ -309,30 +314,30 @@ function App() {
             ) : (
               <div className="empty-state">
                 {allWindowCandidates.length === 0
-                  ? "No windows are available yet. Bring the target app to the desktop and wait a moment."
-                  : "No windows match the current filter."}
+                  ? messages.noWindowsAvailable
+                  : messages.noWindowsMatch}
               </div>
             )}
           </section>
 
           <section className="workflow-pane effect-pane">
             <div className="effect-header">
-              <PaneHeader subtitle={effectMessage(snapshot)} title="Effect" />
+              <PaneHeader subtitle={effectMessage(messages, snapshot)} title={messages.effect} />
               <StatusChip
-                label={effectStatusLabel(snapshot.lens.status)}
+                label={effectStatusLabel(messages, snapshot.lens.status)}
                 status={effectStatusChip(snapshot.lens.status)}
               />
             </div>
 
             <section className="pane-section effect-picker-section">
               <select
-                aria-label="Effect"
+                aria-label={messages.effect}
                 className="field-select"
                 id="effect-select"
                 onChange={(event) => setSelectedPreset(event.target.value as VisualPreset)}
                 value={selectedPreset}
               >
-                {effectChoices.map((preset) => (
+                {localizedEffectChoices.map((preset) => (
                   <option key={preset.id} value={preset.id}>
                     {preset.label}
                   </option>
@@ -352,9 +357,16 @@ function App() {
                 onClick={() => void handleAttachSelectedWindow()}
                 type="button"
               >
-                {applyButtonLabel(busyAction, selectedPresetDefinition, selectedWindow)}
+                {messages.applyButton({
+                  busy: busyAction === "apply",
+                  hasPreset: Boolean(selectedPresetDefinition),
+                  hasSelectedWindow: Boolean(selectedWindow),
+                  presetLabel: selectedPresetDefinition?.label ?? null,
+                })}
               </button>
-              <p className="body-copy action-hint">{applyHint(selectedWindow)}</p>
+              <p className="body-copy action-hint">
+                {messages.applyHint(selectedWindow?.attachmentState ?? null)}
+              </p>
               <div className="button-row">
                 <button
                   className="button button-secondary"
@@ -362,25 +374,27 @@ function App() {
                   onClick={() => void handleDetachLens()}
                   type="button"
                 >
-                  {busyAction === "turnOff" ? "Turning off…" : "Turn off"}
+                  {busyAction === "turnOff" ? messages.turningOff : messages.turnOff}
                 </button>
               </div>
               <dl className="detail-list session-details">
                 <div>
-                  <dt>Window</dt>
-                  <dd>{activeTarget?.title ?? selectedWindow?.title ?? "No window selected"}</dd>
+                  <dt>{messages.selectedWindow}</dt>
+                  <dd>{activeTarget?.title ?? selectedWindow?.title ?? messages.chooseWindow}</dd>
                 </div>
               </dl>
             </section>
 
             <section className="pane-section selected-window-section">
-              <PaneHeader title="Selected window" />
+              <PaneHeader title={messages.selectedWindow} />
               {selectedWindow ? (
-                <SelectedWindowDetails candidate={selectedWindow} devMode={snapshot.devMode} />
+                <SelectedWindowDetails
+                  candidate={selectedWindow}
+                  devMode={snapshot.devMode}
+                  messages={messages}
+                />
               ) : (
-                <div className="empty-state">
-                  Select a window from the list to choose where the effect should go.
-                </div>
+                <div className="empty-state">{messages.selectedWindowEmpty}</div>
               )}
             </section>
           </section>
@@ -388,12 +402,30 @@ function App() {
 
         <details className="drawer-panel settings-panel">
           <summary>
-            <span>Settings</span>
+            <span>{messages.settings}</span>
           </summary>
           <div className="drawer-body">
             <section className="drawer-section">
+              <label className="field-label" htmlFor="language-select">
+                {messages.language}
+              </label>
+              <select
+                className="field-select"
+                disabled={busyAction === "settings"}
+                id="language-select"
+                onChange={(event) => void handleLanguageChange(event.target.value as AppLanguage)}
+                value={snapshot.settings.language}
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </section>
+            <section className="drawer-section">
               <label className="field-label" htmlFor="theme-select">
-                Theme
+                {messages.theme}
               </label>
               <select
                 className="field-select"
@@ -402,30 +434,35 @@ function App() {
                 onChange={(event) => void handleThemeChange(event.target.value as ThemePreference)}
                 value={snapshot.settings.themePreference}
               >
-                {THEME_OPTIONS.map((option) => (
+                {themeOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
-              <p className="body-copy">{themeDescription(snapshot.settings.themePreference)}</p>
+              <p className="body-copy">
+                {messages.themeDescription(snapshot.settings.themePreference)}
+              </p>
             </section>
             <section className="drawer-section">
-              <label className="toggle-field" htmlFor="related-windows-toggle">
+              <label className="toggle-switch" htmlFor="related-windows-toggle">
+                <span className="toggle-switch-wrap">
+                  <input
+                    aria-checked={snapshot.settings.applyToRelatedWindows}
+                    checked={snapshot.settings.applyToRelatedWindows}
+                    className="toggle-switch-input"
+                    disabled={busyAction === "settings"}
+                    id="related-windows-toggle"
+                    onChange={(event) => void handleRelatedWindowScopeChange(event.target.checked)}
+                    role="switch"
+                    type="checkbox"
+                  />
+                  <span aria-hidden="true" className="toggle-switch-control" />
+                </span>
                 <div className="toggle-copy">
-                  <span className="field-label">Apply to related windows</span>
-                  <p className="body-copy">
-                    Automatically keep the effect on new windows from the same app when possible.
-                  </p>
+                  <span className="field-label">{messages.relatedWindows}</span>
+                  <p className="body-copy">{messages.relatedWindowsDescription}</p>
                 </div>
-                <input
-                  checked={snapshot.settings.applyToRelatedWindows}
-                  className="toggle-input"
-                  disabled={busyAction === "settings"}
-                  id="related-windows-toggle"
-                  onChange={(event) => void handleRelatedWindowScopeChange(event.target.checked)}
-                  type="checkbox"
-                />
               </label>
             </section>
           </div>
@@ -434,7 +471,7 @@ function App() {
         {snapshot.devMode ? (
           <details className="drawer-panel support-panel">
             <summary>
-              <span>Support & diagnostics</span>
+              <span>{messages.supportDiagnostics}</span>
             </summary>
             <div className="drawer-body">
               <div className="support-actions">
@@ -444,7 +481,7 @@ function App() {
                   onClick={() => void handleOpenLogs()}
                   type="button"
                 >
-                  {busyAction === "logs" ? "Opening…" : "Open logs"}
+                  {busyAction === "logs" ? messages.opening : messages.openLogs}
                 </button>
                 <button
                   className="button button-secondary"
@@ -453,31 +490,31 @@ function App() {
                   type="button"
                 >
                   {busyAction === "copy"
-                    ? "Copying…"
+                    ? messages.copying
                     : copiedReport
-                      ? "Copied"
-                      : "Copy debug report"}
+                      ? messages.copied
+                      : messages.copyDebugReport}
                 </button>
               </div>
 
               <div className="support-grid">
                 <section className="drawer-section">
-                  <PaneHeader subtitle="Local-only runtime details." title="Runtime" />
+                  <PaneHeader subtitle={messages.runtimeSubtitle} title={messages.runtime} />
                   <dl className="detail-list">
                     <div>
-                      <dt>Backend</dt>
+                      <dt>{messages.backend}</dt>
                       <dd>{snapshot.platform.backendLabel}</dd>
                     </div>
                     <div>
-                      <dt>Window count</dt>
+                      <dt>{messages.windowCount}</dt>
                       <dd>{snapshot.windowCandidates.length.toString()}</dd>
                     </div>
                     <div>
-                      <dt>Settings file</dt>
+                      <dt>{messages.settingsFile}</dt>
                       <dd>{snapshot.diagnostics.settingsFile}</dd>
                     </div>
                     <div>
-                      <dt>Log file</dt>
+                      <dt>{messages.logFile}</dt>
                       <dd>{snapshot.diagnostics.logFile}</dd>
                     </div>
                   </dl>
@@ -485,8 +522,8 @@ function App() {
 
                 <section className="drawer-section">
                   <PaneHeader
-                    subtitle="Newest events first."
-                    title={`Recent events (${snapshot.diagnostics.recentEvents.length})`}
+                    subtitle={messages.recentEventsSubtitle}
+                    title={messages.recentEvents(snapshot.diagnostics.recentEvents.length)}
                   />
                   <div className="log-list">
                     {snapshot.diagnostics.recentEvents.slice(0, 8).map((event) => (
@@ -515,11 +552,13 @@ function PaneHeader({ subtitle, title }: { subtitle?: string; title: string }) {
 function WindowRow({
   candidate,
   lensStatus,
+  messages,
   onSelect,
   selected,
 }: {
   candidate: WindowDescriptor;
   lensStatus: AppSnapshot["lens"]["status"] | null;
+  messages: Messages;
   onSelect: () => void;
   selected: boolean;
 }) {
@@ -536,17 +575,17 @@ function WindowRow({
           <strong className="window-title">{candidate.title}</strong>
           <div className="window-state">
             {candidate.attachmentState === "minimized" ? (
-              <StatusChip label="Minimized" status="neutral" />
+              <StatusChip label={messages.minimized} status="neutral" />
             ) : null}
             {lensStatus ? (
               <StatusChip
-                label={windowEffectLabel(lensStatus)}
+                label={messages.windowEffectLabel(lensStatus)}
                 status={windowEffectTone(lensStatus)}
               />
             ) : null}
           </div>
         </div>
-        <p className="window-subtitle">{executableName(candidate.executablePath)}</p>
+        <p className="window-subtitle">{executableName(messages, candidate.executablePath)}</p>
       </button>
     </li>
   );
@@ -555,48 +594,50 @@ function WindowRow({
 function SelectedWindowDetails({
   candidate,
   devMode,
+  messages,
 }: {
   candidate: WindowDescriptor;
   devMode: boolean;
+  messages: Messages;
 }) {
   return (
     <>
       <dl className="detail-list">
         <div>
-          <dt>Title</dt>
+          <dt>{messages.title}</dt>
           <dd>{candidate.title}</dd>
         </div>
         <div>
-          <dt>State</dt>
-          <dd>{windowStateLabel(candidate)}</dd>
+          <dt>{messages.state}</dt>
+          <dd>{messages.windowState(candidate.attachmentState)}</dd>
         </div>
         <div>
-          <dt>Application</dt>
-          <dd>{executableName(candidate.executablePath)}</dd>
+          <dt>{messages.application}</dt>
+          <dd>{executableName(messages, candidate.executablePath)}</dd>
         </div>
       </dl>
       {devMode ? (
         <details className="inline-details">
-          <summary>Advanced details</summary>
+          <summary>{messages.advancedDetails}</summary>
           <dl className="detail-list advanced-detail-list">
             <div>
-              <dt>Executable path</dt>
-              <dd>{candidate.executablePath ?? "Unavailable"}</dd>
+              <dt>{messages.executablePath}</dt>
+              <dd>{candidate.executablePath ?? messages.unavailable}</dd>
             </div>
             <div>
-              <dt>Window class</dt>
-              <dd>{candidate.windowClass ?? "Unavailable"}</dd>
+              <dt>{messages.windowClass}</dt>
+              <dd>{candidate.windowClass ?? messages.unavailable}</dd>
             </div>
             <div>
-              <dt>Bounds</dt>
+              <dt>{messages.bounds}</dt>
               <dd>{formatBounds(candidate)}</dd>
             </div>
             <div>
-              <dt>Process</dt>
+              <dt>{messages.process}</dt>
               <dd>{candidate.processId.toString()}</dd>
             </div>
             <div>
-              <dt>Window ID</dt>
+              <dt>{messages.windowId}</dt>
               <dd>{candidate.windowId}</dd>
             </div>
           </dl>
@@ -643,7 +684,7 @@ function filterWindowCandidates(candidates: WindowDescriptor[], query: string) {
     const haystack = [
       candidate.title,
       candidate.executablePath ?? "",
-      executableName(candidate.executablePath),
+      executableName(getMessages("en"), candidate.executablePath),
       candidate.windowClass ?? "",
       candidate.attachmentState,
     ]
@@ -654,49 +695,17 @@ function filterWindowCandidates(candidates: WindowDescriptor[], query: string) {
   });
 }
 
-function applyButtonLabel(
-  busyAction: BusyAction,
-  preset: PresetDefinition | null,
-  selectedWindow: WindowDescriptor | null
-) {
-  if (busyAction === "apply") {
-    return "Applying…";
-  }
-
-  if (!selectedWindow) {
-    return "Choose a window";
-  }
-
-  if (!preset) {
-    return "Choose an effect";
-  }
-
-  return `Apply ${preset.label}`;
-}
-
-function applyHint(selectedWindow: WindowDescriptor | null) {
-  if (!selectedWindow) {
-    return "Select a window to continue.";
-  }
-
-  if (selectedWindow.attachmentState === "minimized") {
-    return "This window is minimized. The effect will appear when it is back on screen.";
-  }
-
-  return "Ready to apply the selected effect to this window.";
-}
-
-function windowListSubtitle(totalCount: number, query: string) {
+function windowListSubtitle(messages: Messages, totalCount: number, query: string) {
   if (query.trim()) {
-    return `${totalCount} windows match.`;
+    return messages.windowsMatch(totalCount);
   }
 
-  return `${totalCount} windows shown. Updates automatically.`;
+  return messages.windowsShown(totalCount);
 }
 
-function executableName(path: string | null) {
+function executableName(messages: Messages, path: string | null) {
   if (!path) {
-    return "Executable unavailable";
+    return messages.executableUnavailable;
   }
 
   return path.split(/[/\\]/).filter(Boolean).at(-1) ?? path;
@@ -706,23 +715,24 @@ function formatBounds(candidate: WindowDescriptor) {
   return `${candidate.bounds.width}x${candidate.bounds.height} at ${candidate.bounds.left}, ${candidate.bounds.top}`;
 }
 
-function effectStatusLabel(status: AppSnapshot["lens"]["status"]) {
-  switch (status) {
-    case "pending":
-      return "Pending";
-    case "attached":
-      return "Applied";
-    case "detached":
-      return "Off";
-    case "suspended":
-      return "Off";
-  }
+function effectStatusLabel(messages: Messages, status: AppSnapshot["lens"]["status"]) {
+  return messages.windowEffectLabel(status);
 }
 
-function effectMessage(snapshot: AppSnapshot) {
-  return snapshot.lens.status === "detached"
-    ? "Choose how the selected window should look."
-    : snapshot.lens.summary;
+function effectMessage(messages: Messages, snapshot: AppSnapshot) {
+  if (snapshot.lens.status === "detached" || !snapshot.lens.activePreset) {
+    return messages.effectHintDetached;
+  }
+
+  return messages.effectSummary({
+    coveredCount: snapshot.lens.coveredTargets.length,
+    presetLabel: messages.presetLabel(snapshot.lens.activePreset),
+    status: snapshot.lens.status,
+    targetTitle: snapshot.lens.activeTarget?.title ?? null,
+    visibleCount: snapshot.lens.coveredTargets.filter(
+      (target) => target.attachmentState === "available"
+    ).length,
+  });
 }
 
 function effectStatusChip(status: AppSnapshot["lens"]["status"]): StatusTone {
@@ -752,39 +762,24 @@ function levelToStatus(level: RuntimeEvent["level"]): StatusTone {
   }
 }
 
-function themeOptionLabel(theme: ThemePreference | "light" | "dark" | "greyscale-invert") {
-  switch (theme) {
-    case "system":
-      return "System";
-    case "light":
-      return "Light";
-    case "dark":
-      return "Dark";
-    case "greyscaleInvert":
-    case "greyscale-invert":
-      return "Greyscale Invert";
-  }
+function themeOptionsFor(messages: Messages) {
+  return [
+    { label: messages.themeLabel("system"), value: "system" as ThemePreference },
+    { label: messages.themeLabel("light"), value: "light" as ThemePreference },
+    { label: messages.themeLabel("dark"), value: "dark" as ThemePreference },
+    {
+      label: messages.themeLabel("greyscaleInvert"),
+      value: "greyscaleInvert" as ThemePreference,
+    },
+  ];
 }
 
-function themeDescription(themePreference: ThemePreference) {
-  if (themePreference === "system") {
-    return "Follow the operating system theme.";
-  }
-
-  if (themePreference === "greyscaleInvert") {
-    return "Use GlareMute's internal greyscale inverted appearance.";
-  }
-
-  return `Use the ${themeOptionLabel(themePreference)} appearance for GlareMute itself.`;
-}
-
-function windowStateLabel(candidate: WindowDescriptor) {
-  switch (candidate.attachmentState) {
-    case "available":
-      return "Ready";
-    case "minimized":
-      return "Minimized; the effect appears once it is back on screen";
-  }
+function localizePresetDefinitions(presets: PresetDefinition[], messages: Messages) {
+  return presets.map((preset) => ({
+    ...preset,
+    label: messages.presetLabel(preset.id),
+    summary: messages.presetSummary(preset.id),
+  }));
 }
 
 function visibleEffectPresets(presets: PresetDefinition[]) {
@@ -793,7 +788,6 @@ function visibleEffectPresets(presets: PresetDefinition[]) {
 
 function windowLensStatus(
   candidate: WindowDescriptor,
-  _snapshot: AppSnapshot,
   coveredWindowIds: Set<string>
 ): AppSnapshot["lens"]["status"] | null {
   if (!coveredWindowIds.has(candidate.windowId)) {
@@ -801,19 +795,6 @@ function windowLensStatus(
   }
 
   return candidate.attachmentState === "minimized" ? "pending" : "attached";
-}
-
-function windowEffectLabel(status: AppSnapshot["lens"]["status"]) {
-  switch (status) {
-    case "pending":
-      return "Pending";
-    case "attached":
-      return "Applied";
-    case "suspended":
-      return "Applied";
-    case "detached":
-      return "Off";
-  }
 }
 
 function windowEffectTone(status: AppSnapshot["lens"]["status"]): StatusTone {

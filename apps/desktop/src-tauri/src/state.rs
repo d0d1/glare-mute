@@ -5,9 +5,9 @@ use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use glare_mute_core::{
-    APP_NAME, AppSettings, AppSnapshot, LOG_FILE_NAME, PlatformSummary, RECENT_EVENT_LIMIT,
-    RuntimeDiagnostics, RuntimeEvent, RuntimeEventLevel, SETTINGS_FILE_NAME, ThemePreference,
-    default_preset_catalog,
+    APP_NAME, AppLanguage, AppSettings, AppSnapshot, LOG_FILE_NAME, PlatformSummary,
+    RECENT_EVENT_LIMIT, RuntimeDiagnostics, RuntimeEvent, RuntimeEventLevel, SETTINGS_FILE_NAME,
+    ThemePreference, default_preset_catalog,
 };
 use tauri::{AppHandle, Manager};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -93,6 +93,23 @@ impl ManagedState {
             RuntimeEventLevel::Info,
             "settings".to_string(),
             format!("theme preference updated to {:?}", theme),
+        );
+
+        self.snapshot_with_settings(snapshot)
+    }
+
+    pub fn set_language(&self, language: AppLanguage) -> Result<AppSnapshot> {
+        let snapshot = {
+            let mut store = self.settings_store.lock().expect("settings lock poisoned");
+            store.current.language = language;
+            persist_settings(&self.settings_file, &store.current)?;
+            store.current.clone()
+        };
+
+        self.record_event(
+            RuntimeEventLevel::Info,
+            "settings".to_string(),
+            format!("language updated to {:?}", language),
         );
 
         self.snapshot_with_settings(snapshot)

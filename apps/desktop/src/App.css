@@ -202,8 +202,18 @@ input:disabled {
 .workflow-pane {
   display: grid;
   gap: 16px;
+  min-height: 0;
   min-width: 0;
   padding: 22px;
+}
+
+.window-pane {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.effect-pane {
+  align-content: start;
+  grid-auto-rows: min-content;
 }
 
 .workflow-pane + .workflow-pane {
@@ -239,20 +249,70 @@ input:disabled {
   align-items: center;
 }
 
-.toggle-field {
-  justify-content: space-between;
-}
-
 .toggle-copy {
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.toggle-input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent-strong);
+.toggle-switch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.toggle-switch-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 48px;
+  height: 28px;
+  margin-top: 2px;
+}
+
+.toggle-switch-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.toggle-switch-control {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background-muted);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.toggle-switch-control::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--background-panel-strong);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.18);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.toggle-switch-input:checked + .toggle-switch-control {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--button-fill), var(--button-fill-strong));
+}
+
+.toggle-switch-input:checked + .toggle-switch-control::after {
+  transform: translateX(20px);
+}
+
+.toggle-switch-input:focus-visible + .toggle-switch-control {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
 }
 
 .pane-copy h2,
@@ -327,12 +387,14 @@ input:disabled {
 
 .window-list {
   display: grid;
+  align-content: start;
+  min-height: 0;
   margin: 0;
   padding: 0;
   list-style: none;
   background: var(--background-muted);
+  height: 100%;
   overflow: auto;
-  max-height: 640px;
 }
 
 .window-row {

@@ -5,6 +5,7 @@
 - [Repository map](./repo-map.md)
 - [Architecture overview](./architecture/overview.md)
 - [Development workflow](./contributing/development.md)
+- [Release workflow](./contributing/releasing.md)
 - [Testing workflow](./contributing/testing.md)
 - [Debugging workflow](./operations/debugging.md)
 - [Windows IRPF test flow](./operations/windows-irpf-test.md)
@@ -24,6 +25,7 @@
 ## Contributing
 
 - [Development workflow](./contributing/development.md)
+- [Release workflow](./contributing/releasing.md)
 - [Conventional Commits](./contributing/conventional-commits.md)
 - [Testing workflow](./contributing/testing.md)
 

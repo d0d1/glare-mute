@@ -14,7 +14,7 @@ const TRAY_ID: &str = "main-tray";
 const TRAY_ICON_PNG: &[u8] = include_bytes!("../icons/tray-icon.png");
 
 pub fn build_tray(app: &App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, MENU_OPEN, "Open GlareMute", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, MENU_OPEN, "Open Glare mute", true, None::<&str>)?;
     let detach = MenuItem::with_id(app, MENU_DETACH_LENS, "Turn off effect", true, None::<&str>)?;
     let open_logs = MenuItem::with_id(
         app,
@@ -29,7 +29,7 @@ pub fn build_tray(app: &App) -> tauri::Result<()> {
 
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
-        .tooltip("GlareMute")
+        .tooltip("Glare mute")
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| handle_menu_event(app, event.id.as_ref()))
         .on_tray_icon_event(|tray, event| {

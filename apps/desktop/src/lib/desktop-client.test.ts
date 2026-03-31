@@ -9,9 +9,16 @@ describe("desktopClient mock runtime", () => {
   it("boots with the preview snapshot", async () => {
     const snapshot = await desktopClient.bootstrapState();
 
-    expect(snapshot.appName).toBe("GlareMute");
+    expect(snapshot.appName).toBe("Glare mute");
     expect(snapshot.platform.backendId).toBe("browser-preview");
     expect(snapshot.diagnostics.recentEvents.length).toBeGreaterThan(0);
+  });
+
+  it("persists language changes", async () => {
+    await desktopClient.bootstrapState();
+    const nextSnapshot = await desktopClient.setLanguage("pt-BR");
+
+    expect(nextSnapshot.settings.language).toBe("pt-BR");
   });
 
   it("persists theme changes", async () => {

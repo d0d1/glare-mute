@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-GlareMute had drifted into exposing product concepts that were not honest enough:
+Glare mute had drifted into exposing product concepts that were not honest enough:
 
 - a faux `Dark` effect that did not produce a credible dark-mode result
 - separate `Pause` and `Turn off` controls that had no meaningful user-visible distinction

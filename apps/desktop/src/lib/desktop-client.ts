@@ -1,4 +1,5 @@
 import type {
+  AppLanguage,
   AppSnapshot,
   RuntimeEventLevel,
   ThemePreference,
@@ -24,6 +25,7 @@ interface DesktopClient {
   openLogsDirectory(): Promise<void>;
   refreshWindowCandidates(): Promise<AppSnapshot>;
   setApplyToRelatedWindows(enabled: boolean): Promise<AppSnapshot>;
+  setLanguage(language: AppLanguage): Promise<AppSnapshot>;
   setThemePreference(theme: ThemePreference): Promise<AppSnapshot>;
 }
 
@@ -60,6 +62,10 @@ export const desktopClient: DesktopClient = isTauriRuntime()
       async setApplyToRelatedWindows(enabled) {
         const invoke = await loadInvoke();
         return invoke<AppSnapshot>("set_apply_to_related_windows", { enabled });
+      },
+      async setLanguage(language) {
+        const invoke = await loadInvoke();
+        return invoke<AppSnapshot>("set_language", { language });
       },
       async setThemePreference(theme) {
         const invoke = await loadInvoke();
@@ -237,6 +243,18 @@ function createMockDesktopClient(): DesktopClient {
       writeSnapshot(snapshot);
       return snapshot;
     },
+    async setLanguage(language) {
+      const snapshot = readSnapshot();
+      snapshot.settings.language = language;
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "mock-runtime",
+        message: `language updated to ${language}`,
+      });
+      writeSnapshot(snapshot);
+      return snapshot;
+    },
     async setThemePreference(theme) {
       const snapshot = readSnapshot();
       snapshot.settings.themePreference = theme;
@@ -279,6 +297,9 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
     })),
     settings: {
       ...snapshot.settings,
+      language:
+        (snapshot.settings as AppSnapshot["settings"] & { language?: AppLanguage }).language ??
+        "en",
       applyToRelatedWindows:
         (snapshot.settings as AppSnapshot["settings"] & { applyToRelatedWindows?: boolean })
           .applyToRelatedWindows ?? true,
@@ -311,10 +332,11 @@ function normalizeOptionalPresetId(preset: LegacyVisualPreset | null): VisualPre
 
 function defaultSnapshot(): AppSnapshot {
   return {
-    appName: "GlareMute",
+    appName: "Glare mute",
     appVersion: "0.1.0-preview",
     devMode: import.meta.env.DEV,
     settings: {
+      language: "en",
       themePreference: "system",
       applyToRelatedWindows: true,
       suspendOnStartup: false,

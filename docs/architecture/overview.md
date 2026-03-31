@@ -1,6 +1,6 @@
 # Architecture Overview
 
-GlareMute is built as a Windows-focused desktop shell with a browser-preview mode.
+Glare mute is built as a Windows-focused desktop shell with a browser-preview mode.
 
 That split is deliberate:
 

@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("GlareMute product shell", () => {
+test.describe("Glare mute product shell", () => {
   test.setTimeout(60000);
 
   test("renders a stable system-dark preview", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "GlareMute" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Glare mute" })).toBeVisible();
     await expect(page.getByText("Available windows")).toBeVisible();
     await expect(page.getByRole("button", { name: "Choose a window", exact: true })).toBeDisabled();
     await expect(page.getByText(/^Support & diagnostics$/)).toHaveCount(0);

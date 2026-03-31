@@ -1,6 +1,6 @@
-# GlareMute
+# Glare mute
 
-GlareMute is an open-source Windows accessibility lens for bright legacy apps that ignore dark mode and contrast settings.
+Glare mute is an open-source Windows accessibility lens for bright legacy apps that ignore dark mode and contrast settings.
 
 The first native test slice is intentionally narrow:
 
@@ -79,4 +79,5 @@ cargo check -p glare-mute-desktop
 - [Architecture overview](./docs/architecture/overview.md)
 - [Debugging workflow](./docs/operations/debugging.md)
 - [Development workflow](./docs/contributing/development.md)
+- [Release workflow](./docs/contributing/releasing.md)
 - [Windows IRPF test flow](./docs/operations/windows-irpf-test.md)

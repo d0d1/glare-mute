@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability set for the GlareMute desktop window",
+  "description": "Capability set for the Glare mute desktop window",
   "windows": ["main"],
   "permissions": ["core:default", "opener:default"]
 }

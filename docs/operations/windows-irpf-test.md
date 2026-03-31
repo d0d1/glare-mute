@@ -1,6 +1,6 @@
 # Windows IRPF Test Flow
 
-This is the current native test path for GlareMute.
+This is the current native test path for Glare mute.
 
 ## What the first native slice does
 
@@ -36,7 +36,7 @@ The desktop shell uses the live frontend from the dev server and writes logs to:
 ## Test against IRPF
 
 1. Launch the IRPF desktop app and make sure its main window is visible.
-2. Bring `GlareMute` to the foreground.
+2. Bring `Glare mute` to the foreground.
 3. In `Available windows`, select the IRPF window from the live list.
 4. In `Effect`, confirm `Greyscale Invert` is selected.
 5. Click `Apply Greyscale Invert`.
@@ -46,7 +46,7 @@ The desktop shell uses the live frontend from the dev server and writes logs to:
 9. Use `Turn off` if you want to clear the effect entirely.
 10. Move focus to another app, including another monitor if available, and confirm the IRPF window keeps its effect while it stays visible.
 11. If `Greyscale Invert` is too harsh, try `Invert` to keep full-color cues while still flipping the app away from bright defaults.
-12. Open `Settings` if you need to change GlareMute's own theme or related-window coverage.
+12. Open `Settings` if you need to change Glare mute's own theme or related-window coverage.
 13. Open `Support & diagnostics` only in dev builds if you need logs or a debug report.
 
 ## Known limits of this slice

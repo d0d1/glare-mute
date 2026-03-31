@@ -1,6 +1,6 @@
 # Debugging Workflow
 
-GlareMute is designed so agents can inspect failures locally before asking for user help.
+Glare mute is designed so agents can inspect failures locally before asking for user help.
 
 ## First places to look
 
