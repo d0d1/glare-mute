@@ -5,7 +5,7 @@
 Use the browser preview for most UI verification:
 
 ```bash
-pnpm test:e2e
+corepack pnpm test:e2e
 ```
 
 Playwright is the review gate for visual work.
@@ -16,7 +16,7 @@ The e2e command builds the app and runs screenshots against a dedicated preview 
 Use Vitest for fast logic tests around the shared client and theme helpers:
 
 ```bash
-pnpm test:unit
+corepack pnpm test:unit
 ```
 
 ## Rust checks

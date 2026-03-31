@@ -15,7 +15,8 @@ The repository is intentionally shaped for fast Windows iteration and repeatable
 - first-class diagnostics in dev builds and on disk
 - screenshot-backed browser review against a deterministic preview server
 - local installs only, with repo-managed tooling wherever possible
-- icon generation scripted through a repo-local Python venv
+- package-manager cache kept under `.cache/pnpm`
+- icon generation scripted through a repo-local Python venv under `.cache`
 
 ## Project rules
 
@@ -31,9 +32,9 @@ The repository is intentionally shaped for fast Windows iteration and repeatable
 For the browser preview:
 
 ```bash
-pnpm install
-pnpm playwright:install
-pnpm dev:web
+corepack pnpm install
+corepack pnpm playwright:install
+corepack pnpm dev:web
 ```
 
 This serves the live iteration surface on `http://127.0.0.1:1420`.
@@ -41,7 +42,7 @@ This serves the live iteration surface on `http://127.0.0.1:1420`.
 When this repo is shared between WSL and Windows, install dependencies once after pulling changes so the workspace picks up both the current Linux tooling and the Windows-native Tauri CLI binding:
 
 ```bash
-npm exec --yes pnpm@10.32.1 -- install
+corepack pnpm install
 ```
 
 For the Windows desktop shell from this repo layout:
@@ -55,22 +56,22 @@ That direct path still works, but the workspace is also configured to install th
 To regenerate the app and tray icon assets:
 
 ```bash
-python3 -m venv .venv-icons
-.venv-icons/bin/pip install pillow
-.venv-icons/bin/python scripts/generate_icons.py
+python3 -m venv .cache/python/icon-tools
+.cache/python/icon-tools/bin/pip install pillow
+.cache/python/icon-tools/bin/python scripts/generate_icons.py
 ```
 
 ## Verification
 
 ```bash
-pnpm build:web
-pnpm test:unit
-pnpm test:e2e
+corepack pnpm build:web
+corepack pnpm test:unit
+corepack pnpm test:e2e
 cargo test -p glare-mute-core -p glare-mute-platform
 cargo check -p glare-mute-desktop
 ```
 
-`pnpm test:e2e` builds the web app and runs Playwright against a separate preview server on `http://127.0.0.1:1421`, so screenshot review does not depend on a dev server already running.
+`corepack pnpm test:e2e` builds the web app and runs Playwright against a separate preview server on `http://127.0.0.1:1421`, so screenshot review does not depend on a dev server already running.
 
 ## Documentation
 

@@ -23,6 +23,18 @@ const args = [
   ...topics.flatMap((topic) => ["-f", `names[]=${topic}`]),
 ];
 
+const ghCheck = spawnSync("gh", ["--version"], {
+  cwd: process.cwd(),
+  encoding: "utf8",
+});
+
+if (ghCheck.error?.code === "ENOENT") {
+  console.error(
+    "GitHub CLI is required for scripts/sync-topics.mjs. Install `gh` and authenticate before running this repo-maintenance script."
+  );
+  process.exit(1);
+}
+
 const execution = spawnSync("gh", args, {
   cwd: process.cwd(),
   stdio: "inherit",

@@ -41,8 +41,8 @@ From Windows:
 
 ```powershell
 cd C:\Users\dbhul\code\glare-mute
-npm exec --yes pnpm@10.32.1 -- install
-npm exec --yes pnpm@10.32.1 -- --filter @glaremute/desktop tauri:build
+corepack pnpm install
+corepack pnpm --filter @glaremute/desktop tauri:build
 ```
 
 The built outputs should appear under:

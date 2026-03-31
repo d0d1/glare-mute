@@ -4,7 +4,8 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
   workers: 1,
-  reporter: [["list"], ["html", { open: "never" }]],
+  outputDir: ".cache/playwright/test-results",
+  reporter: [["list"], ["html", { open: "never", outputFolder: ".cache/playwright/report" }]],
   retries: process.env.CI ? 2 : 0,
   use: {
     baseURL: "http://127.0.0.1:1421",
@@ -13,7 +14,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "pnpm --filter @glaremute/desktop build:web && pnpm --filter @glaremute/desktop preview:test",
+      "node ./scripts/pnpm.mjs --filter @glaremute/desktop build:web && node ./scripts/pnpm.mjs --filter @glaremute/desktop preview:test",
     url: "http://127.0.0.1:1421",
     reuseExistingServer: !process.env.CI,
     stdout: "pipe",

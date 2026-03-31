@@ -1,0 +1,231 @@
+.effect-header,
+.toolbar,
+.button-row,
+.field-note,
+.support-actions,
+.log-meta,
+.group-heading,
+.toggle-field {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.effect-header,
+.group-heading {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.toolbar,
+.button-row,
+.field-note,
+.support-actions,
+.log-meta,
+.toggle-field {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.toggle-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toggle-switch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.toggle-switch-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 48px;
+  height: 28px;
+  margin-top: 2px;
+}
+
+.toggle-switch-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.toggle-switch-control {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background-muted);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.toggle-switch-control::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--background-panel-strong);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.18);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.toggle-switch-input:checked + .toggle-switch-control {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--button-fill), var(--button-fill-strong));
+}
+
+.toggle-switch-input:checked + .toggle-switch-control::after {
+  transform: translateX(20px);
+}
+
+.toggle-switch-input:focus-visible + .toggle-switch-control {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.choice-field {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.choice-trigger {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background-muted);
+  color: var(--foreground);
+  text-align: left;
+}
+
+.choice-trigger[data-open="true"] {
+  border-color: var(--accent-strong);
+}
+
+.choice-trigger:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.choice-caret {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 160ms ease;
+}
+
+.choice-field[data-open="true"] .choice-caret {
+  transform: rotate(-135deg) translate(-2px, -1px);
+}
+
+.choice-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+  max-height: 252px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background-panel-strong);
+  box-shadow: var(--shadow-sm);
+  overflow: auto;
+}
+
+.choice-field[data-open-upward="true"] .choice-menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+.choice-option {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.choice-option:hover,
+.choice-option:focus-visible,
+.choice-option[data-selected="true"] {
+  background: var(--row-background-selected);
+  outline: none;
+}
+
+.choice-option-indicator {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+}
+
+.choice-option-indicator[data-selected="true"] {
+  border-color: transparent;
+  background: var(--accent-strong);
+}
+
+.search-input,
+.field-select {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background-muted);
+  color: var(--foreground);
+}
+
+.search-input {
+  max-width: none;
+}
+
+.search-input::placeholder {
+  color: var(--foreground-muted);
+}
+
+.button {
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--button-fill), var(--button-fill-strong));
+  color: var(--button-text);
+  font-weight: 800;
+}
+
+.button-secondary {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--foreground);
+}

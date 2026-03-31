@@ -14,7 +14,7 @@ The app is tray-first, but the main window still matters because that is where d
 Theme support is treated as a product requirement, not polish.
 
 - default theme preference is `system`
-- manual `light` and `dark` overrides are supported
+- manual `light`, `dark`, `invert`, and `greyscaleInvert` overrides are supported
 - the frontend applies a document theme token
 - the desktop shell also updates native window theme preference
 

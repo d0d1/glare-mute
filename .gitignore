@@ -1,12 +1,10 @@
 node_modules/
-.pnpm-store/
 .cache/
 .cargo-home/
+.tmp/
 .venv/
 .venv-icons/
 coverage/
-playwright-report/
-test-results/
 
 dist/
 target/

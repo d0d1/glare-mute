@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { chooseSettingOption } from "../support/settings";
+
 test.describe("Glare mute product shell", () => {
   test.setTimeout(60000);
 
@@ -20,10 +22,7 @@ test.describe("Glare mute product shell", () => {
   test("renders a stable manual-light preview", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/");
-    await page.locator(".settings-panel > summary").click();
-    await page.locator("#theme-select").click();
-    await page.getByRole("button", { name: "Light", exact: true }).click();
-    await page.locator(".settings-panel > summary").click();
+    await chooseSettingOption(page, "theme-select", "Light");
     await expect(page.locator(".app-frame")).toHaveScreenshot("dashboard-light.png", {
       maxDiffPixels: 500,
     });

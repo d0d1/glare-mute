@@ -14,7 +14,7 @@ This is the current native test path for Glare mute.
 From WSL or another shell with the repo-local JavaScript toolchain available:
 
 ```bash
-pnpm dev:web
+corepack pnpm dev:web
 ```
 
 This serves the UI on `http://127.0.0.1:1420`.
@@ -38,14 +38,14 @@ The desktop shell uses the live frontend from the dev server and writes logs to:
 1. Launch the IRPF desktop app and make sure its main window is visible.
 2. Bring `Glare mute` to the foreground.
 3. In `Available windows`, select the IRPF window from the live list.
-4. In `Effect`, confirm `Greyscale Invert` is selected.
-5. Click `Apply Greyscale Invert`.
+4. In `Effect`, confirm `Invert` is selected.
+5. Click `Apply Invert`.
 6. If the IRPF window is minimized, leave it selected and apply the effect anyway. The effect will appear once the window is back on screen.
 7. Leave `Apply to related windows` enabled in `Settings` if you want new IRPF dialogs from the same app session to pick up the same effect automatically.
 8. Open another IRPF top-level dialog if available and confirm it receives the same effect without replacing the first covered window.
 9. Use `Turn off` if you want to clear the effect entirely.
 10. Move focus to another app, including another monitor if available, and confirm the IRPF window keeps its effect while it stays visible.
-11. If `Greyscale Invert` is too harsh, try `Invert` to keep full-color cues while still flipping the app away from bright defaults.
+11. If `Invert` is not strong enough, try `Greyscale Invert` for harsher white-heavy screens.
 12. Open `Settings` if you need to change Glare mute's own theme or related-window coverage.
 13. Open `Support & diagnostics` only in dev builds if you need logs or a debug report.
 

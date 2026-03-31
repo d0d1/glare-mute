@@ -1,0 +1,103 @@
+.app-shell {
+  width: min(1320px, calc(100vw - 24px));
+  margin: 0 auto;
+  padding: 18px 0 30px;
+}
+
+.app-frame {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.04), transparent 48%),
+    var(--background-panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.loading-frame {
+  min-height: calc(100vh - 48px);
+  place-items: center;
+}
+
+.loading-card {
+  max-width: 460px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background-panel-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.product-header,
+.pane-copy,
+.pane-section,
+.drawer-section,
+.log-item {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.product-header h1,
+.loading-card h1 {
+  margin: 0;
+  font-size: clamp(2.35rem, 4vw, 3.9rem);
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+}
+
+.pane-copy h2,
+.group-heading h3 {
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.pane-copy h2 {
+  font-size: 1.04rem;
+}
+
+.group-heading h3 {
+  font-size: 0.94rem;
+}
+
+.workflow-shell,
+.drawer-panel,
+.window-list,
+.log-item,
+.alert,
+.empty-state,
+.inline-details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.workflow-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.16fr) minmax(380px, 0.92fr);
+  background: var(--background-panel-strong);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.workflow-pane {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+  padding: 22px;
+}
+
+.window-pane {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow-anchor: none;
+}
+
+.effect-pane {
+  align-content: start;
+  grid-auto-rows: min-content;
+}
+
+.workflow-pane + .workflow-pane {
+  border-left: 1px solid var(--border);
+}

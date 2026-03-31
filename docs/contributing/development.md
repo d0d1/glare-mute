@@ -5,7 +5,7 @@
 ### Fast UI loop
 
 ```bash
-pnpm dev:web
+corepack pnpm dev:web
 ```
 
 Use this for frontend iteration, contract debugging, and Playwright review.
@@ -26,7 +26,7 @@ This direct `cargo run` path is still a valid loop, but the workspace install is
 If you have just pulled changes or the repo was previously installed only from WSL, refresh the shared install once:
 
 ```bash
-npm exec --yes pnpm@10.32.1 -- install
+corepack pnpm install
 ```
 
 ## Development expectations
@@ -39,10 +39,11 @@ npm exec --yes pnpm@10.32.1 -- install
 
 ## Local dependency policy
 
-- JavaScript tooling is installed locally through `pnpm`
+- JavaScript tooling is installed locally through the repo-pinned `pnpm`
+- pnpm cache lives under `.cache/pnpm`
 - Playwright browsers live under `.cache/ms-playwright`
-- Python tooling should go in a repo-local venv
-- icon generation uses `.venv-icons` plus `scripts/generate_icons.py`
+- Python tooling should go in a repo-local venv under `.cache/python`
+- icon generation uses `.cache/python/icon-tools` plus `scripts/generate_icons.py`
 - avoid global installs unless a tool genuinely cannot be used locally
 - the desktop package scripts call local `node_modules` entrypoints directly to avoid `.cmd` shim drift between WSL and Windows
 
@@ -51,9 +52,9 @@ npm exec --yes pnpm@10.32.1 -- install
 Regenerate the app and tray icons from the scripted source when the product mark changes:
 
 ```bash
-python3 -m venv .venv-icons
-.venv-icons/bin/pip install pillow
-.venv-icons/bin/python scripts/generate_icons.py
+python3 -m venv .cache/python/icon-tools
+.cache/python/icon-tools/bin/pip install pillow
+.cache/python/icon-tools/bin/python scripts/generate_icons.py
 ```
 
 This updates the Tauri bundle assets under `apps/desktop/src-tauri/icons`.

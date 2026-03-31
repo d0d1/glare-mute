@@ -1,59 +1,55 @@
 # Backend Strategy
 
-The agreed v1 backend direction is hybrid, not monolithic.
+The current v1 path is intentionally narrow: prove trustworthy per-window accessibility effects on Windows before expanding the effect catalog.
 
-## Effect families
+## Current shipped effect family
 
-### Tint backend
+The native effect surface currently centers on transform presets:
 
-This is the zero-lag path for:
+- `Invert`
+- `Greyscale Invert`
 
-- Warm Dim
-- future glare-reduction presets that do not need pixel remapping
+`Invert` is the default because it tested better than expected on the real IRPF target app while keeping more recognizable color structure than grayscale.
+`Greyscale Invert` remains available for harsher white-heavy screens where maximum glare reduction matters more than visual fidelity.
 
-This backend is the reliability anchor for v1.
-
-### Transform backend
-
-This is the higher-risk path for:
-
-- Greyscale Invert
-- future invert-style presets
-
-The current first native slice uses this path directly for `Greyscale Invert` because it already proved valuable on the target IRPF app during system-wide grayscale inversion testing.
-
-The project is explicitly not anchored to one implementation yet.
-
-## Transform candidates
-
-### Magnification API
-
-This is the first spike candidate because it matches the product shape unusually well:
-
-- source rectangle based
-- color transform capable
-- native Windows accessibility lineage
-
-It is still treated as experimental until real latency and compatibility measurements justify promoting it.
-
-## Current implementation note
+## Current backend
 
 Today the Windows desktop shell uses:
 
 - explicit top-level window enumeration as the picker
-- Magnification API for the first native `Greyscale Invert` and `Invert` implementations
-- a single user-facing `Turn off` action instead of separate pause/off controls
+- related-window coverage within the same running app when possible
+- the Windows Magnification API for the current `Invert` and `Greyscale Invert` implementations
+- one user-facing `Turn off` action rather than separate pause/off controls
 
-Tint presets remain in the contract, but they are not the first implemented native backend.
+This backend is the only currently proven native path for the product.
 
-### Windows Graphics Capture plus shader
+## Strategic position
 
-This remains a first-class fallback and possible long-term production path for transform mode.
+Magnification is the current implementation, but it is not the assumed long-term winner.
 
-## Out of v1
+The backend decision remains open because the product still needs better evidence on:
+
+- unfocused visible coverage behavior across more app topologies
+- overlap and z-order edge cases
+- compatibility with more legacy Windows apps
+
+## Next fallback path
+
+`Windows.Graphics.Capture` plus a shader/compositor pipeline remains the main fallback and validation path if Magnification stops scaling to the product requirements.
+
+That path is attractive because it could improve:
+
+- effect persistence while the target remains visible but unfocused
+- future transform experimentation
+- separation between capture/render logic and effect logic
+
+It is still a validation path, not the active production backend.
+
+## Explicitly out of scope for v1
 
 - generic in-process theme injection
 - toolkit-specific hooks
 - cross-platform delivery
+- promising a semantic dark mode for arbitrary legacy apps
 
-Those paths either increase maintenance cost too sharply or fail the trust and compatibility goals for the first release.
+Those paths either increase maintenance cost too sharply or overpromise what the current safe architecture can credibly deliver.

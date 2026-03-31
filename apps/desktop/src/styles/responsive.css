@@ -1,0 +1,50 @@
+@media (max-width: 1120px) {
+  .workflow-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 880px) {
+  .app-shell {
+    width: min(100vw - 16px, 100%);
+    padding-top: 12px;
+  }
+
+  .app-frame {
+    padding: 18px;
+  }
+
+  .workflow-shell,
+  .support-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-pane + .workflow-pane {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .search-input {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .button,
+  .button-secondary,
+  .choice-trigger,
+  .field-select,
+  .search-input {
+    width: 100%;
+  }
+
+  .button-row,
+  .support-actions {
+    display: grid;
+  }
+
+  .drawer-panel summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

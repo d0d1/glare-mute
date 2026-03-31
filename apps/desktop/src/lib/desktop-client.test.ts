@@ -1,3 +1,4 @@
+import type { WindowDescriptor } from "./contracts";
 import { __resetMockDesktopClient, desktopClient } from "./desktop-client";
 
 describe("desktopClient mock runtime", () => {
@@ -43,7 +44,7 @@ describe("desktopClient mock runtime", () => {
   it("keeps minimized windows in the list and applies pending output until they return", async () => {
     const snapshot = await desktopClient.bootstrapState();
     const candidate = snapshot.windowCandidates.find(
-      (entry) => entry.attachmentState === "minimized"
+      (entry: WindowDescriptor) => entry.attachmentState === "minimized"
     );
 
     expect(candidate).toBeDefined();

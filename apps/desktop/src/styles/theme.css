@@ -1,0 +1,112 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Manrope Variable", "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --shadow-lg: 0 28px 70px rgba(9, 16, 22, 0.18);
+  --shadow-sm: 0 14px 30px rgba(9, 16, 22, 0.08);
+}
+
+:root[data-theme="light"] {
+  --background: #f2ede6;
+  --background-panel: rgba(255, 251, 245, 0.88);
+  --background-panel-strong: rgba(255, 250, 244, 0.95);
+  --background-muted: rgba(243, 234, 223, 0.9);
+  --row-background: rgba(255, 255, 255, 0.34);
+  --row-background-selected: rgba(255, 247, 235, 0.82);
+  --foreground: #182129;
+  --foreground-muted: #52606a;
+  --border: rgba(113, 92, 64, 0.18);
+  --accent: #9c5d1a;
+  --accent-strong: #7f4712;
+  --success: #2e6e54;
+  --warning: #b0721e;
+  --danger: #a24730;
+  --neutral: #667179;
+  --button-fill: #e3a14e;
+  --button-fill-strong: #cb7d24;
+  --button-text: #1f1308;
+}
+
+:root[data-theme="dark"] {
+  --background: #0f1418;
+  --background-panel: rgba(18, 24, 30, 0.9);
+  --background-panel-strong: rgba(21, 29, 36, 0.96);
+  --background-muted: rgba(25, 33, 40, 0.95);
+  --row-background: rgba(255, 255, 255, 0.03);
+  --row-background-selected: rgba(43, 32, 18, 0.62);
+  --foreground: #ebf0ec;
+  --foreground-muted: #9eaca5;
+  --border: rgba(192, 204, 196, 0.12);
+  --accent: #d98d38;
+  --accent-strong: #eeaa5d;
+  --success: #7ac19a;
+  --warning: #efb25f;
+  --danger: #ef9b85;
+  --neutral: #a4b0aa;
+  --button-fill: #f0b762;
+  --button-fill-strong: #da8e38;
+  --button-text: #1a1108;
+}
+
+:root[data-theme="invert"] {
+  --background: #08111b;
+  --background-panel: rgba(12, 21, 33, 0.92);
+  --background-panel-strong: rgba(15, 25, 39, 0.97);
+  --background-muted: rgba(18, 31, 48, 0.98);
+  --row-background: rgba(255, 255, 255, 0.035);
+  --row-background-selected: rgba(39, 74, 119, 0.58);
+  --foreground: #f7ebd8;
+  --foreground-muted: #9fb3ca;
+  --border: rgba(187, 211, 236, 0.14);
+  --accent: #7ac2ff;
+  --accent-strong: #b0ddff;
+  --success: #a7e7c2;
+  --warning: #ffd07c;
+  --danger: #ffb2a3;
+  --neutral: #b7c4d2;
+  --button-fill: #88c9ff;
+  --button-fill-strong: #5b9eee;
+  --button-text: #09111b;
+}
+
+:root[data-theme="greyscale-invert"] {
+  --background: #070809;
+  --background-panel: rgba(12, 13, 15, 0.94);
+  --background-panel-strong: rgba(14, 16, 18, 0.98);
+  --background-muted: rgba(26, 28, 31, 0.98);
+  --row-background: rgba(255, 255, 255, 0.025);
+  --row-background-selected: rgba(229, 229, 229, 0.08);
+  --foreground: #f2f2f1;
+  --foreground-muted: #acaca8;
+  --border: rgba(230, 230, 226, 0.13);
+  --accent: #cbcbca;
+  --accent-strong: #efefed;
+  --success: #d7d7d5;
+  --warning: #c2c2be;
+  --danger: #ffffff;
+  --neutral: #b2b2ad;
+  --button-fill: #d9d9d6;
+  --button-fill-strong: #bebebb;
+  --button-text: #090909;
+}
+
+html {
+  background: radial-gradient(circle at top left, rgba(217, 141, 56, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(70, 102, 155, 0.12), transparent 32%),
+    var(--background);
+}
+
+html[data-theme="greyscale-invert"] {
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 26%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 30%),
+    var(--background);
+}
+
+html[data-theme="invert"] {
+  background: radial-gradient(circle at top left, rgba(122, 194, 255, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(255, 178, 163, 0.08), transparent 30%),
+    var(--background);
+}

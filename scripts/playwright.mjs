@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { spawnPackageManagerSync } from "./lib/package-manager.mjs";
+
 const [, , mode = "test", ...rest] = process.argv;
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDirectory, "..");
@@ -11,8 +13,7 @@ const args =
     ? ["exec", "playwright", "install", "chromium", ...rest]
     : ["exec", "playwright", mode, ...rest];
 
-const execution = spawnSync("pnpm", args, {
-  cwd: repoRoot,
+const execution = spawnPackageManagerSync(repoRoot, args, {
   stdio: "inherit",
   env: {
     ...process.env,
