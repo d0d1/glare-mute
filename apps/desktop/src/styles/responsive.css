@@ -1,6 +1,11 @@
 @media (max-width: 1120px) {
   .workflow-shell {
     grid-template-columns: 1fr;
+    max-block-size: none;
+  }
+
+  .window-pane {
+    max-block-size: min(560px, calc(100vh - 260px));
   }
 }
 
