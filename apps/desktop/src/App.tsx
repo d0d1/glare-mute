@@ -11,7 +11,13 @@ import type {
   WindowDescriptor,
 } from "./lib/contracts";
 import { desktopClient } from "./lib/desktop-client";
-import { LANGUAGE_OPTIONS, type Messages, PRODUCT_NAME, getMessages } from "./lib/i18n";
+import {
+  type Messages,
+  PRODUCT_NAME,
+  getMessages,
+  languageOptions,
+  resolveEffectiveLanguage,
+} from "./lib/i18n";
 import {
   applyDocumentTheme,
   getSystemPrefersDark,
@@ -22,7 +28,7 @@ import {
 type BusyAction = "apply" | "copy" | "logs" | "settings" | "turnOff" | null;
 type StatusTone = "available" | "experimental" | "planned" | "unsupported" | "neutral";
 
-const DEFAULT_PRESET: VisualPreset = "greyscaleInvert";
+const DEFAULT_PRESET: VisualPreset = "invert";
 
 function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
@@ -34,7 +40,8 @@ function App() {
   const [selectedPreset, setSelectedPreset] = useState<VisualPreset>(DEFAULT_PRESET);
   const [windowQuery, setWindowQuery] = useState("");
   const hasSnapshot = snapshot !== null;
-  const language: AppLanguage = snapshot?.settings.language ?? "en";
+  const languagePreference: AppLanguage = snapshot?.settings.language ?? "system";
+  const language = resolveEffectiveLanguage(languagePreference);
   const messages = getMessages(language);
 
   useEffect(() => watchSystemTheme(setPrefersDark), []);
@@ -81,17 +88,19 @@ function App() {
     document.documentElement.lang = language;
   }, [language]);
 
+  const backendId = snapshot?.platform.backendId ?? null;
+
   useEffect(() => {
-    if (!snapshot) {
+    if (!backendId) {
       return;
     }
 
     void desktopClient.appendFrontendLog(
       "debug",
       "ui",
-      `desktop surface hydrated with ${snapshot.platform.backendId}`
+      `desktop surface hydrated with ${backendId}`
     );
-  }, [snapshot]);
+  }, [backendId]);
 
   useEffect(() => {
     if (!snapshot) {
@@ -169,6 +178,7 @@ function App() {
   );
   const selectedPresetDefinition =
     localizedEffectChoices.find((preset) => preset.id === selectedPreset) ?? null;
+  const languageChoices = languageOptions(messages);
   const themeOptions = themeOptionsFor(messages);
   const canAttachSelectedWindow = Boolean(selectedWindow) && busyAction !== "apply";
 
@@ -416,7 +426,7 @@ function App() {
                 onChange={(event) => void handleLanguageChange(event.target.value as AppLanguage)}
                 value={snapshot.settings.language}
               >
-                {LANGUAGE_OPTIONS.map((option) => (
+                {languageChoices.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -440,9 +450,6 @@ function App() {
                   </option>
                 ))}
               </select>
-              <p className="body-copy">
-                {messages.themeDescription(snapshot.settings.themePreference)}
-              </p>
             </section>
             <section className="drawer-section">
               <label className="toggle-switch" htmlFor="related-windows-toggle">
@@ -767,6 +774,7 @@ function themeOptionsFor(messages: Messages) {
     { label: messages.themeLabel("system"), value: "system" as ThemePreference },
     { label: messages.themeLabel("light"), value: "light" as ThemePreference },
     { label: messages.themeLabel("dark"), value: "dark" as ThemePreference },
+    { label: messages.themeLabel("invert"), value: "invert" as ThemePreference },
     {
       label: messages.themeLabel("greyscaleInvert"),
       value: "greyscaleInvert" as ThemePreference,

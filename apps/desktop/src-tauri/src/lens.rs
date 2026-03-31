@@ -1252,7 +1252,7 @@ mod platform {
     }
 
     fn preset_label(preset: Option<VisualPreset>) -> &'static str {
-        match preset.unwrap_or(VisualPreset::GreyscaleInvert) {
+        match preset.unwrap_or(VisualPreset::Invert) {
             VisualPreset::Invert => "Invert",
             VisualPreset::WarmDim => "Warm Dim",
             VisualPreset::GreyscaleInvert => "Greyscale Invert",

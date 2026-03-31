@@ -51,6 +51,27 @@
   --button-text: #1a1108;
 }
 
+:root[data-theme="invert"] {
+  --background: #08111b;
+  --background-panel: rgba(12, 21, 33, 0.92);
+  --background-panel-strong: rgba(15, 25, 39, 0.97);
+  --background-muted: rgba(18, 31, 48, 0.98);
+  --row-background: rgba(255, 255, 255, 0.035);
+  --row-background-selected: rgba(39, 74, 119, 0.58);
+  --foreground: #f7ebd8;
+  --foreground-muted: #9fb3ca;
+  --border: rgba(187, 211, 236, 0.14);
+  --accent: #7ac2ff;
+  --accent-strong: #b0ddff;
+  --success: #a7e7c2;
+  --warning: #ffd07c;
+  --danger: #ffb2a3;
+  --neutral: #b7c4d2;
+  --button-fill: #88c9ff;
+  --button-fill-strong: #5b9eee;
+  --button-text: #09111b;
+}
+
 :root[data-theme="greyscale-invert"] {
   --background: #070809;
   --background-panel: rgba(12, 13, 15, 0.94);
@@ -91,6 +112,12 @@ html {
 html[data-theme="greyscale-invert"] {
   background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 26%),
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 30%),
+    var(--background);
+}
+
+html[data-theme="invert"] {
+  background: radial-gradient(circle at top left, rgba(122, 194, 255, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(255, 178, 163, 0.08), transparent 30%),
     var(--background);
 }
 
@@ -209,6 +236,7 @@ input:disabled {
 
 .window-pane {
   grid-template-rows: auto auto minmax(0, 1fr);
+  overflow-anchor: none;
 }
 
 .effect-pane {
@@ -395,6 +423,7 @@ input:disabled {
   background: var(--background-muted);
   height: 100%;
   overflow: auto;
+  overflow-anchor: none;
 }
 
 .window-row {

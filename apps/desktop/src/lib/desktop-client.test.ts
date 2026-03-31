@@ -10,6 +10,7 @@ describe("desktopClient mock runtime", () => {
     const snapshot = await desktopClient.bootstrapState();
 
     expect(snapshot.appName).toBe("Glare mute");
+    expect(snapshot.settings.language).toBe("system");
     expect(snapshot.platform.backendId).toBe("browser-preview");
     expect(snapshot.diagnostics.recentEvents.length).toBeGreaterThan(0);
   });

@@ -12,12 +12,15 @@ pub enum ThemePreference {
     System,
     Light,
     Dark,
+    Invert,
     GreyscaleInvert,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AppLanguage {
     #[default]
+    #[serde(rename = "system")]
+    System,
     #[serde(rename = "en")]
     En,
     #[serde(rename = "pt-BR")]
@@ -194,7 +197,7 @@ pub struct AppSnapshot {
 
 impl Default for VisualPreset {
     fn default() -> Self {
-        Self::GreyscaleInvert
+        Self::Invert
     }
 }
 
@@ -236,7 +239,7 @@ fn default_apply_to_related_windows() -> bool {
 }
 
 fn default_app_language() -> AppLanguage {
-    AppLanguage::En
+    AppLanguage::System
 }
 
 pub fn default_preset_catalog() -> Vec<PresetDefinition> {
@@ -272,7 +275,7 @@ mod tests {
     fn default_settings_favor_system_theme() {
         let settings = AppSettings::default();
 
-        assert_eq!(settings.language, AppLanguage::En);
+        assert_eq!(settings.language, AppLanguage::System);
         assert_eq!(settings.theme_preference, ThemePreference::System);
         assert!(settings.apply_to_related_windows);
         assert!(settings.profiles.is_empty());
@@ -293,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_settings_missing_language_default_to_english() {
+    fn legacy_settings_missing_language_default_to_system() {
         let settings: AppSettings = serde_json::from_str(
             r#"{
                 "themePreference": "system",
@@ -304,7 +307,7 @@ mod tests {
         )
         .expect("deserialize legacy settings");
 
-        assert_eq!(settings.language, AppLanguage::En);
+        assert_eq!(settings.language, AppLanguage::System);
     }
 
     #[test]

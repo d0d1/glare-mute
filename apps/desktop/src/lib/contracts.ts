@@ -1,5 +1,5 @@
-export type AppLanguage = "en" | "pt-BR" | "es";
-export type ThemePreference = "system" | "light" | "dark" | "greyscaleInvert";
+export type AppLanguage = "system" | "en" | "pt-BR" | "es";
+export type ThemePreference = "system" | "light" | "dark" | "invert" | "greyscaleInvert";
 export type EffectFamily = "tint" | "transform";
 export type VisualPreset = "warmDim" | "invert" | "greyscaleInvert";
 export type CapabilityStatus = "available" | "experimental" | "planned" | "unsupported";

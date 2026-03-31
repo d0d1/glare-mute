@@ -1,6 +1,6 @@
 import type { ThemePreference } from "./contracts";
 
-export type EffectiveTheme = "light" | "dark" | "greyscale-invert";
+export type EffectiveTheme = "light" | "dark" | "invert" | "greyscale-invert";
 
 export function getSystemPrefersDark(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -20,6 +20,10 @@ export function resolveEffectiveTheme(
 
   if (themePreference === "greyscaleInvert") {
     return "greyscale-invert";
+  }
+
+  if (themePreference === "invert") {
+    return "invert";
   }
 
   return themePreference;

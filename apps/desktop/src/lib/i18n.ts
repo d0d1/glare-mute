@@ -8,11 +8,7 @@ import type {
 
 export const PRODUCT_NAME = "Glare mute";
 
-export const LANGUAGE_OPTIONS: Array<{ label: string; value: AppLanguage }> = [
-  { label: "English", value: "en" },
-  { label: "Português (Brasil)", value: "pt-BR" },
-  { label: "Español", value: "es" },
-];
+export type ResolvedLanguage = Exclude<AppLanguage, "system">;
 
 export interface Messages {
   advancedDetails: string;
@@ -63,6 +59,7 @@ export interface Messages {
   settingsFile: string;
   state: string;
   supportDiagnostics: string;
+  system: string;
   theme: string;
   title: string;
   turningOff: string;
@@ -90,21 +87,58 @@ export interface Messages {
   applyHint: (attachmentState: WindowAttachmentState | null) => string;
   presetLabel: (preset: VisualPreset) => string;
   presetSummary: (preset: VisualPreset) => string;
-  themeDescription: (theme: ThemePreference) => string;
   themeLabel: (theme: ThemePreference) => string;
   windowEffectLabel: (status: LensStatus) => string;
   windowState: (state: WindowAttachmentState) => string;
 }
 
-const LOCALE_TAG: Record<AppLanguage, string> = {
+const LOCALE_TAG: Record<ResolvedLanguage, string> = {
   en: "en-US",
   "pt-BR": "pt-BR",
   es: "es-ES",
 };
 
-export function getMessages(language: AppLanguage): Messages {
-  const number = new Intl.NumberFormat(LOCALE_TAG[language]);
+export function resolveEffectiveLanguage(language: AppLanguage): ResolvedLanguage {
+  if (language !== "system") {
+    return language;
+  }
 
+  if (typeof navigator === "undefined") {
+    return "en";
+  }
+
+  const candidates = [...(navigator.languages ?? []), navigator.language].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const normalized = candidate.toLowerCase();
+
+    if (normalized.startsWith("pt-br") || normalized.startsWith("pt")) {
+      return "pt-BR";
+    }
+
+    if (normalized.startsWith("es")) {
+      return "es";
+    }
+
+    if (normalized.startsWith("en")) {
+      return "en";
+    }
+  }
+
+  return "en";
+}
+
+export function languageOptions(messages: Messages): Array<{ label: string; value: AppLanguage }> {
+  return [
+    { label: messages.system, value: "system" },
+    { label: "English", value: "en" },
+    { label: "Português (Brasil)", value: "pt-BR" },
+    { label: "Español", value: "es" },
+  ];
+}
+
+export function getMessages(language: ResolvedLanguage): Messages {
+  const number = new Intl.NumberFormat(LOCALE_TAG[language]);
   const formatCount = (count: number) => number.format(count);
 
   const base = {
@@ -173,7 +207,6 @@ export function getMessages(language: AppLanguage): Messages {
     },
     presetLabel: (preset: VisualPreset) => getPresetLabel(language, preset),
     presetSummary: (preset: VisualPreset) => getPresetSummary(language, preset),
-    themeDescription: (theme: ThemePreference) => getThemeDescription(language, theme),
     themeLabel: (theme: ThemePreference) => getThemeLabel(language, theme),
     windowEffectLabel: (status: LensStatus) => getWindowEffectLabel(language, status),
     windowState: (state: WindowAttachmentState) => getWindowState(language, state),
@@ -184,7 +217,6 @@ export function getMessages(language: AppLanguage): Messages {
     | "applyHint"
     | "presetLabel"
     | "presetSummary"
-    | "themeDescription"
     | "themeLabel"
     | "windowEffectLabel"
     | "windowState"
@@ -245,6 +277,7 @@ export function getMessages(language: AppLanguage): Messages {
         settingsFile: "Arquivo de configurações",
         state: "Estado",
         supportDiagnostics: "Suporte e diagnósticos",
+        system: "Sistema",
         theme: "Tema",
         title: "Título",
         turningOff: "Desligando…",
@@ -312,6 +345,7 @@ export function getMessages(language: AppLanguage): Messages {
         settingsFile: "Archivo de configuración",
         state: "Estado",
         supportDiagnostics: "Soporte y diagnósticos",
+        system: "Sistema",
         theme: "Tema",
         title: "Título",
         turningOff: "Apagando…",
@@ -379,6 +413,7 @@ export function getMessages(language: AppLanguage): Messages {
         settingsFile: "Settings file",
         state: "State",
         supportDiagnostics: "Support & diagnostics",
+        system: "System",
         theme: "Theme",
         title: "Title",
         turningOff: "Turning off…",
@@ -394,7 +429,7 @@ export function getMessages(language: AppLanguage): Messages {
   }
 }
 
-function getPresetLabel(language: AppLanguage, preset: VisualPreset) {
+function getPresetLabel(language: ResolvedLanguage, preset: VisualPreset) {
   switch (preset) {
     case "invert":
       return language === "pt-BR" ? "Inverter" : language === "es" ? "Invertir" : "Invert";
@@ -413,7 +448,7 @@ function getPresetLabel(language: AppLanguage, preset: VisualPreset) {
   }
 }
 
-function getPresetSummary(language: AppLanguage, preset: VisualPreset) {
+function getPresetSummary(language: ResolvedLanguage, preset: VisualPreset) {
   switch (preset) {
     case "invert":
       return language === "pt-BR"
@@ -436,7 +471,7 @@ function getPresetSummary(language: AppLanguage, preset: VisualPreset) {
   }
 }
 
-function getThemeLabel(language: AppLanguage, theme: ThemePreference) {
+function getThemeLabel(language: ResolvedLanguage, theme: ThemePreference) {
   switch (theme) {
     case "system":
       return language === "pt-BR" ? "Sistema" : language === "es" ? "Sistema" : "System";
@@ -444,6 +479,8 @@ function getThemeLabel(language: AppLanguage, theme: ThemePreference) {
       return language === "pt-BR" ? "Claro" : language === "es" ? "Claro" : "Light";
     case "dark":
       return language === "pt-BR" ? "Escuro" : language === "es" ? "Oscuro" : "Dark";
+    case "invert":
+      return language === "pt-BR" ? "Inverter" : language === "es" ? "Invertir" : "Invert";
     case "greyscaleInvert":
       return language === "pt-BR"
         ? "Inverter em tons de cinza"
@@ -453,36 +490,7 @@ function getThemeLabel(language: AppLanguage, theme: ThemePreference) {
   }
 }
 
-function getThemeDescription(language: AppLanguage, theme: ThemePreference) {
-  switch (theme) {
-    case "system":
-      return language === "pt-BR"
-        ? "Seguir o tema do sistema operacional."
-        : language === "es"
-          ? "Seguir el tema del sistema operativo."
-          : "Follow the operating system theme.";
-    case "light":
-      return language === "pt-BR"
-        ? `Usar a aparência clara do ${PRODUCT_NAME}.`
-        : language === "es"
-          ? `Usar la apariencia clara de ${PRODUCT_NAME}.`
-          : `Use the Light appearance for ${PRODUCT_NAME}.`;
-    case "dark":
-      return language === "pt-BR"
-        ? `Usar a aparência escura do ${PRODUCT_NAME}.`
-        : language === "es"
-          ? `Usar la apariencia oscura de ${PRODUCT_NAME}.`
-          : `Use the Dark appearance for ${PRODUCT_NAME}.`;
-    case "greyscaleInvert":
-      return language === "pt-BR"
-        ? `Usar a aparência interna invertida em tons de cinza do ${PRODUCT_NAME}.`
-        : language === "es"
-          ? `Usar la apariencia interna invertida en escala de grises de ${PRODUCT_NAME}.`
-          : `Use ${PRODUCT_NAME}'s internal greyscale inverted appearance.`;
-  }
-}
-
-function getWindowEffectLabel(language: AppLanguage, status: LensStatus) {
+function getWindowEffectLabel(language: ResolvedLanguage, status: LensStatus) {
   switch (status) {
     case "pending":
       return language === "pt-BR" ? "Pendente" : language === "es" ? "Pendiente" : "Pending";
@@ -494,7 +502,7 @@ function getWindowEffectLabel(language: AppLanguage, status: LensStatus) {
   }
 }
 
-function getWindowState(language: AppLanguage, state: WindowAttachmentState) {
+function getWindowState(language: ResolvedLanguage, state: WindowAttachmentState) {
   switch (state) {
     case "available":
       return language === "pt-BR" ? "Pronta" : language === "es" ? "Lista" : "Ready";
@@ -507,7 +515,7 @@ function getWindowState(language: AppLanguage, state: WindowAttachmentState) {
   }
 }
 
-function detachedEffectMessage(language: AppLanguage) {
+function detachedEffectMessage(language: ResolvedLanguage) {
   return language === "pt-BR"
     ? "Escolha como a janela selecionada deve ficar."
     : language === "es"
@@ -515,7 +523,7 @@ function detachedEffectMessage(language: AppLanguage) {
       : "Choose how the selected window should look.";
 }
 
-function appliedOne(language: AppLanguage, presetLabel: string, targetTitle: string | null) {
+function appliedOne(language: ResolvedLanguage, presetLabel: string, targetTitle: string | null) {
   const title = targetTitle ?? fallbackTarget(language);
   return language === "pt-BR"
     ? `${presetLabel} está ativo em ${title}.`
@@ -525,7 +533,7 @@ function appliedOne(language: AppLanguage, presetLabel: string, targetTitle: str
 }
 
 function appliedMany(
-  language: AppLanguage,
+  language: ResolvedLanguage,
   presetLabel: string,
   visibleCount: number,
   formatCount: (count: number) => string
@@ -537,7 +545,7 @@ function appliedMany(
       : `${presetLabel} is active on ${formatCount(visibleCount)} windows from the same app.`;
 }
 
-function pendingOne(language: AppLanguage, presetLabel: string, targetTitle: string | null) {
+function pendingOne(language: ResolvedLanguage, presetLabel: string, targetTitle: string | null) {
   const title = targetTitle ?? fallbackTarget(language);
   return language === "pt-BR"
     ? `${presetLabel} aparecerá quando ${title} voltar à tela.`
@@ -546,7 +554,7 @@ function pendingOne(language: AppLanguage, presetLabel: string, targetTitle: str
       : `${presetLabel} will appear when ${title} is back on screen.`;
 }
 
-function pendingMany(language: AppLanguage, presetLabel: string) {
+function pendingMany(language: ResolvedLanguage, presetLabel: string) {
   return language === "pt-BR"
     ? `${presetLabel} aparecerá quando o aplicativo selecionado voltar à tela.`
     : language === "es"
@@ -554,7 +562,7 @@ function pendingMany(language: AppLanguage, presetLabel: string) {
       : `${presetLabel} will appear when the selected app is back on screen.`;
 }
 
-function fallbackTarget(language: AppLanguage) {
+function fallbackTarget(language: ResolvedLanguage) {
   return language === "pt-BR"
     ? "a janela selecionada"
     : language === "es"
@@ -562,11 +570,11 @@ function fallbackTarget(language: AppLanguage) {
       : "the selected window";
 }
 
-function getApplying(language: AppLanguage) {
+function getApplying(language: ResolvedLanguage) {
   return language === "pt-BR" ? "Aplicando…" : language === "es" ? "Aplicando…" : "Applying…";
 }
 
-function getChooseWindow(language: AppLanguage) {
+function getChooseWindow(language: ResolvedLanguage) {
   return language === "pt-BR"
     ? "Escolha uma janela"
     : language === "es"
@@ -574,7 +582,7 @@ function getChooseWindow(language: AppLanguage) {
       : "Choose a window";
 }
 
-function getChooseEffect(language: AppLanguage) {
+function getChooseEffect(language: ResolvedLanguage) {
   return language === "pt-BR"
     ? "Escolha um efeito"
     : language === "es"
@@ -582,7 +590,7 @@ function getChooseEffect(language: AppLanguage) {
       : "Choose an effect";
 }
 
-function getApplyPreset(language: AppLanguage, presetLabel: string) {
+function getApplyPreset(language: ResolvedLanguage, presetLabel: string) {
   return language === "pt-BR"
     ? `Aplicar ${presetLabel}`
     : language === "es"
@@ -590,7 +598,7 @@ function getApplyPreset(language: AppLanguage, presetLabel: string) {
       : `Apply ${presetLabel}`;
 }
 
-function getSelectWindowToContinue(language: AppLanguage) {
+function getSelectWindowToContinue(language: ResolvedLanguage) {
   return language === "pt-BR"
     ? "Selecione uma janela para continuar."
     : language === "es"
@@ -598,7 +606,7 @@ function getSelectWindowToContinue(language: AppLanguage) {
       : "Select a window to continue.";
 }
 
-function getApplyHintMinimized(language: AppLanguage) {
+function getApplyHintMinimized(language: ResolvedLanguage) {
   return language === "pt-BR"
     ? "Esta janela está minimizada. O efeito aparecerá quando ela voltar à tela."
     : language === "es"
@@ -606,7 +614,7 @@ function getApplyHintMinimized(language: AppLanguage) {
       : "This window is minimized. The effect will appear when it is back on screen.";
 }
 
-function getApplyHintReady(language: AppLanguage) {
+function getApplyHintReady(language: ResolvedLanguage) {
   return language === "pt-BR"
     ? "Pronto para aplicar o efeito selecionado a esta janela."
     : language === "es"

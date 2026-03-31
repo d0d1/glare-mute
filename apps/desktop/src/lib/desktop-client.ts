@@ -200,7 +200,7 @@ function createMockDesktopClient(): DesktopClient {
           snapshot.lens.coveredTargets = coveredTargets;
           snapshot.lens.status = status;
           snapshot.lens.summary = mockLensSummary(
-            snapshot.lens.activePreset ?? "greyscaleInvert",
+            snapshot.lens.activePreset ?? "invert",
             nextTarget,
             coveredTargets,
             status
@@ -234,7 +234,7 @@ function createMockDesktopClient(): DesktopClient {
         snapshot.lens.coveredTargets = coveredTargets;
         snapshot.lens.status = status;
         snapshot.lens.summary = mockLensSummary(
-          snapshot.lens.activePreset ?? "greyscaleInvert",
+          snapshot.lens.activePreset ?? "invert",
           snapshot.lens.activeTarget,
           coveredTargets,
           status
@@ -299,7 +299,7 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
       ...snapshot.settings,
       language:
         (snapshot.settings as AppSnapshot["settings"] & { language?: AppLanguage }).language ??
-        "en",
+        "system",
       applyToRelatedWindows:
         (snapshot.settings as AppSnapshot["settings"] & { applyToRelatedWindows?: boolean })
           .applyToRelatedWindows ?? true,
@@ -336,7 +336,7 @@ function defaultSnapshot(): AppSnapshot {
     appVersion: "0.1.0-preview",
     devMode: import.meta.env.DEV,
     settings: {
-      language: "en",
+      language: "system",
       themePreference: "system",
       applyToRelatedWindows: true,
       suspendOnStartup: false,

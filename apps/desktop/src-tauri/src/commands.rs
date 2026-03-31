@@ -98,6 +98,7 @@ fn apply_theme_preference(app: &AppHandle, theme: ThemePreference) -> Result<(),
         ThemePreference::System => None,
         ThemePreference::Light => Some(Theme::Light),
         ThemePreference::Dark => Some(Theme::Dark),
+        ThemePreference::Invert => Some(Theme::Dark),
         ThemePreference::GreyscaleInvert => Some(Theme::Dark),
     };
 
