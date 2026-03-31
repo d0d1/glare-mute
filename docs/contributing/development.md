@@ -21,7 +21,13 @@ cmd.exe /c "cd /d C:\Users\dbhul\code\glare-mute && set TAURI_DEV_HOST=127.0.0.1
 
 Use this when working on tray behavior, logging, settings persistence, or native integrations.
 
-This direct `cargo run` path is intentional for this repo layout. It avoids Tauri CLI optional-binary issues when the workspace dependencies were installed from WSL but the desktop runtime needs to launch on Windows.
+This direct `cargo run` path is still a valid loop, but the workspace install is configured to fetch the Windows-native Tauri CLI binding too, so Windows `tauri:dev` and `tauri:build` can run from the same shared repo after a normal install.
+
+If you have just pulled changes or the repo was previously installed only from WSL, refresh the shared install once:
+
+```bash
+npm exec --yes pnpm@10.32.1 -- install
+```
 
 ## Agent-first expectations
 

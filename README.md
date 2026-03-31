@@ -38,13 +38,19 @@ pnpm dev:web
 
 This serves the live iteration surface on `http://127.0.0.1:1420`.
 
+When this repo is shared between WSL and Windows, install dependencies once after pulling changes so the workspace picks up both the current Linux tooling and the Windows-native Tauri CLI binding:
+
+```bash
+npm exec --yes pnpm@10.32.1 -- install
+```
+
 For the Windows desktop shell from this repo layout:
 
 ```bash
 cmd.exe /c "cd /d C:\Users\dbhul\code\glare-mute && set TAURI_DEV_HOST=127.0.0.1 && cargo run -p glare-mute-desktop"
 ```
 
-That path avoids the Tauri CLI optional-binary issues that show up when the repo dependencies were installed from WSL.
+That direct path still works, but the workspace is also configured to install the Windows-native Tauri CLI binding so `tauri:build` and other Windows CLI flows can run from the same shared repo after a normal install.
 
 To regenerate the app and tray icon assets:
 
