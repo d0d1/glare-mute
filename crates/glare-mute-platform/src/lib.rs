@@ -88,7 +88,7 @@ mod windows {
                     "windowPicker",
                     "Window picker",
                     CapabilityStatus::Available,
-                    "The Windows shell can keep a live list of top-level app windows, including minimized ones that can be armed before restore.",
+                    "The Windows shell can keep a live list of top-level app windows, including minimized ones that can be armed before restore and related windows from the same running app when enabled.",
                 ),
                 capability(
                     "tintBackend",
@@ -100,7 +100,7 @@ mod windows {
                     "magnificationBackend",
                     "Magnification transform",
                     CapabilityStatus::Available,
-                    "Dark and Greyscale Invert run through the Magnification API for the Windows shell, with z-order tracking that keeps visible targets transformed even when another app has focus.",
+                    "Dark and Greyscale Invert run through the Magnification API for the Windows shell, with z-order tracking that keeps visible targets transformed even when another app has focus and can cover multiple related windows from the same running app.",
                 ),
                 capability(
                     "captureBackend",

@@ -37,6 +37,7 @@ describe("desktopClient mock runtime", () => {
     expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
     expect(nextSnapshot.lens.activePreset).toBe("greyscaleInvert");
     expect(nextSnapshot.lens.status).toBe("attached");
+    expect(nextSnapshot.lens.coveredTargets.length).toBeGreaterThan(1);
   });
 
   it("keeps minimized windows in the list and applies pending output until they return", async () => {
@@ -55,6 +56,18 @@ describe("desktopClient mock runtime", () => {
     expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
     expect(nextSnapshot.lens.activePreset).toBe("dark");
     expect(nextSnapshot.lens.status).toBe("pending");
+  });
+
+  it("can disable related-window coverage while keeping the current target", async () => {
+    const snapshot = await desktopClient.bootstrapState();
+    const candidate = snapshot.windowCandidates[0];
+
+    await desktopClient.attachWindow(candidate.windowId, "greyscaleInvert");
+    const nextSnapshot = await desktopClient.setApplyToRelatedWindows(false);
+
+    expect(nextSnapshot.settings.applyToRelatedWindows).toBe(false);
+    expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
+    expect(nextSnapshot.lens.coveredTargets).toHaveLength(1);
   });
 
   it("refreshes the mock window list", async () => {

@@ -83,6 +83,8 @@ pub struct ProfileRule {
 pub struct AppSettings {
     pub theme_preference: ThemePreference,
     pub panic_hotkey: String,
+    #[serde(default = "default_apply_to_related_windows")]
+    pub apply_to_related_windows: bool,
     pub suspend_on_startup: bool,
     pub profiles: Vec<ProfileRule>,
 }
@@ -160,6 +162,7 @@ pub struct LensSnapshot {
     pub status: LensStatus,
     pub active_preset: Option<VisualPreset>,
     pub active_target: Option<WindowDescriptor>,
+    pub covered_targets: Vec<WindowDescriptor>,
     pub summary: String,
     pub backend_label: String,
 }
@@ -189,10 +192,15 @@ impl Default for AppSettings {
         Self {
             theme_preference: ThemePreference::System,
             panic_hotkey: "Ctrl+Shift+F8".to_string(),
+            apply_to_related_windows: default_apply_to_related_windows(),
             suspend_on_startup: false,
             profiles: Vec::new(),
         }
     }
+}
+
+fn default_apply_to_related_windows() -> bool {
+    true
 }
 
 pub fn default_preset_catalog() -> Vec<PresetDefinition> {
@@ -229,7 +237,23 @@ mod tests {
 
         assert_eq!(settings.theme_preference, ThemePreference::System);
         assert_eq!(settings.panic_hotkey, "Ctrl+Shift+F8");
+        assert!(settings.apply_to_related_windows);
         assert!(settings.profiles.is_empty());
+    }
+
+    #[test]
+    fn legacy_settings_missing_related_window_scope_default_to_enabled() {
+        let settings: AppSettings = serde_json::from_str(
+            r#"{
+                "themePreference": "system",
+                "panicHotkey": "Ctrl+Shift+F8",
+                "suspendOnStartup": false,
+                "profiles": []
+            }"#,
+        )
+        .expect("deserialize legacy settings");
+
+        assert!(settings.apply_to_related_windows);
     }
 
     #[test]

@@ -42,6 +42,7 @@ pub fn run() {
             commands::get_debug_report,
             commands::open_logs_directory,
             commands::refresh_window_candidates,
+            commands::set_apply_to_related_windows,
             commands::set_theme_preference,
             commands::toggle_suspend
         ])

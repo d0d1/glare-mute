@@ -31,6 +31,7 @@ export interface ProfileRule {
 export interface AppSettings {
   themePreference: ThemePreference;
   panicHotkey: string;
+  applyToRelatedWindows: boolean;
   suspendOnStartup: boolean;
   profiles: ProfileRule[];
 }
@@ -80,6 +81,7 @@ export interface LensSnapshot {
   status: LensStatus;
   activePreset: VisualPreset | null;
   activeTarget: WindowDescriptor | null;
+  coveredTargets: WindowDescriptor[];
   summary: string;
   backendLabel: string;
 }

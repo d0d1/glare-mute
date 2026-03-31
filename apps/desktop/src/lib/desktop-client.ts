@@ -1,4 +1,10 @@
-import type { AppSnapshot, RuntimeEventLevel, ThemePreference, VisualPreset } from "./contracts";
+import type {
+  AppSnapshot,
+  RuntimeEventLevel,
+  ThemePreference,
+  VisualPreset,
+  WindowDescriptor,
+} from "./contracts";
 
 const STORAGE_KEY = "glaremute:preview-snapshot";
 type LegacyVisualPreset = VisualPreset | "darken";
@@ -17,6 +23,7 @@ interface DesktopClient {
   getDebugReport(): Promise<string>;
   openLogsDirectory(): Promise<void>;
   refreshWindowCandidates(): Promise<AppSnapshot>;
+  setApplyToRelatedWindows(enabled: boolean): Promise<AppSnapshot>;
   setThemePreference(theme: ThemePreference): Promise<AppSnapshot>;
   toggleSuspend(): Promise<AppSnapshot>;
 }
@@ -50,6 +57,10 @@ export const desktopClient: DesktopClient = isTauriRuntime()
       async refreshWindowCandidates() {
         const invoke = await loadInvoke();
         return invoke<AppSnapshot>("refresh_window_candidates");
+      },
+      async setApplyToRelatedWindows(enabled) {
+        const invoke = await loadInvoke();
+        return invoke<AppSnapshot>("set_apply_to_related_windows", { enabled });
       },
       async setThemePreference(theme) {
         const invoke = await loadInvoke();
@@ -88,33 +99,26 @@ function createMockDesktopClient(): DesktopClient {
         throw new Error(`${preset} is not available in the current build.`);
       }
 
+      const coveredTargets = relatedWindowTargets(snapshot, candidate);
+      const status = mockLensStatus(snapshot.diagnostics.suspended, coveredTargets);
       snapshot.lens = {
         activePreset: preset,
         activeTarget: candidate,
+        coveredTargets,
         backendLabel: "Mock transform backend",
-        status: snapshot.diagnostics.suspended
-          ? "suspended"
-          : candidate.attachmentState === "minimized"
-            ? "pending"
-            : "attached",
-        summary: mockLensSummary(
-          preset,
-          candidate.title,
-          snapshot.diagnostics.suspended
-            ? "suspended"
-            : candidate.attachmentState === "minimized"
-              ? "pending"
-              : "attached"
-        ),
+        status,
+        summary: mockLensSummary(preset, candidate, coveredTargets, status),
       };
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "info",
         source: "mock-runtime",
         message:
-          candidate.attachmentState === "minimized"
+          status === "pending"
             ? `applied ${preset} to ${candidate.title}; it will appear once the window is back on screen`
-            : `applied ${preset} to ${candidate.title}`,
+            : snapshot.settings.applyToRelatedWindows && coveredTargets.length > 1
+              ? `applied ${preset} to ${coveredTargets.length} windows from the same app`
+              : `applied ${preset} to ${candidate.title}`,
       });
       writeSnapshot(snapshot);
       return snapshot;
@@ -149,6 +153,7 @@ function createMockDesktopClient(): DesktopClient {
       snapshot.lens = {
         activePreset: null,
         activeTarget: null,
+        coveredTargets: [],
         backendLabel: "Mock transform backend",
         status: "detached",
         summary: "No effect is active in the browser preview.",
@@ -183,17 +188,59 @@ function createMockDesktopClient(): DesktopClient {
         const nextTarget =
           snapshot.windowCandidates.find(
             (entry) => entry.windowId === snapshot.lens.activeTarget?.windowId
-          ) ?? null;
+          ) ??
+          snapshot.windowCandidates.find(
+            (entry) => entry.processId === snapshot.lens.activeTarget?.processId
+          ) ??
+          null;
         snapshot.lens.activeTarget = nextTarget;
-        if (!snapshot.diagnostics.suspended && nextTarget) {
-          snapshot.lens.status =
-            nextTarget.attachmentState === "minimized" ? "pending" : "attached";
+        if (nextTarget) {
+          const coveredTargets = relatedWindowTargets(snapshot, nextTarget);
+          const status = mockLensStatus(snapshot.diagnostics.suspended, coveredTargets);
+          snapshot.lens.coveredTargets = coveredTargets;
+          snapshot.lens.status = status;
           snapshot.lens.summary = mockLensSummary(
             snapshot.lens.activePreset ?? "greyscaleInvert",
-            nextTarget.title,
-            snapshot.lens.status
+            nextTarget,
+            coveredTargets,
+            status
           );
+        } else {
+          snapshot.lens = {
+            activePreset: null,
+            activeTarget: null,
+            coveredTargets: [],
+            backendLabel: snapshot.lens.backendLabel,
+            status: snapshot.diagnostics.suspended ? "suspended" : "detached",
+            summary: snapshot.diagnostics.suspended
+              ? "The current effect is paused."
+              : "No effect is active in the browser preview.",
+          };
         }
+      }
+      writeSnapshot(snapshot);
+      return snapshot;
+    },
+    async setApplyToRelatedWindows(enabled) {
+      const snapshot = readSnapshot();
+      snapshot.settings.applyToRelatedWindows = enabled;
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "mock-runtime",
+        message: enabled ? "related window coverage enabled" : "related window coverage disabled",
+      });
+      if (snapshot.lens.activeTarget) {
+        const coveredTargets = relatedWindowTargets(snapshot, snapshot.lens.activeTarget);
+        const status = mockLensStatus(snapshot.diagnostics.suspended, coveredTargets);
+        snapshot.lens.coveredTargets = coveredTargets;
+        snapshot.lens.status = status;
+        snapshot.lens.summary = mockLensSummary(
+          snapshot.lens.activePreset ?? "greyscaleInvert",
+          snapshot.lens.activeTarget,
+          coveredTargets,
+          status
+        );
       }
       writeSnapshot(snapshot);
       return snapshot;
@@ -213,20 +260,16 @@ function createMockDesktopClient(): DesktopClient {
     async toggleSuspend() {
       const snapshot = readSnapshot();
       snapshot.diagnostics.suspended = !snapshot.diagnostics.suspended;
-      snapshot.lens.status =
-        snapshot.diagnostics.suspended && snapshot.lens.activeTarget
+      snapshot.lens.status = snapshot.lens.activeTarget
+        ? mockLensStatus(snapshot.diagnostics.suspended, snapshot.lens.coveredTargets)
+        : snapshot.diagnostics.suspended
           ? "suspended"
-          : snapshot.lens.activeTarget
-            ? snapshot.lens.activeTarget.attachmentState === "minimized"
-              ? "pending"
-              : "attached"
-            : snapshot.diagnostics.suspended
-              ? "suspended"
-              : "detached";
+          : "detached";
       snapshot.lens.summary = snapshot.lens.activeTarget
         ? mockLensSummary(
             snapshot.lens.activePreset ?? "greyscaleInvert",
-            snapshot.lens.activeTarget.title,
+            snapshot.lens.activeTarget,
+            snapshot.lens.coveredTargets,
             snapshot.lens.status
           )
         : snapshot.diagnostics.suspended
@@ -271,6 +314,9 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
     })),
     settings: {
       ...snapshot.settings,
+      applyToRelatedWindows:
+        (snapshot.settings as AppSnapshot["settings"] & { applyToRelatedWindows?: boolean })
+          .applyToRelatedWindows ?? true,
       profiles: snapshot.settings.profiles.map((profile) => ({
         ...profile,
         preset: normalizePersistedPresetId(profile.preset),
@@ -279,6 +325,9 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
     lens: {
       ...snapshot.lens,
       activePreset: normalizeOptionalPresetId(snapshot.lens.activePreset),
+      coveredTargets:
+        (snapshot.lens as AppSnapshot["lens"] & { coveredTargets?: WindowDescriptor[] })
+          .coveredTargets ?? (snapshot.lens.activeTarget ? [snapshot.lens.activeTarget] : []),
     },
   };
 }
@@ -303,6 +352,7 @@ function defaultSnapshot(): AppSnapshot {
     settings: {
       themePreference: "system",
       panicHotkey: "Ctrl+Shift+F8",
+      applyToRelatedWindows: true,
       suspendOnStartup: false,
       profiles: [],
     },
@@ -338,7 +388,7 @@ function defaultSnapshot(): AppSnapshot {
           "windowPicker",
           "Window picker",
           "experimental",
-          "Browser preview simulates a live unified window list, including minimized windows that can be armed before restore."
+          "Browser preview simulates a live unified window list, including minimized windows that can be armed before restore and related windows from the same running app."
         ),
         capability(
           "tintBackend",
@@ -350,7 +400,7 @@ function defaultSnapshot(): AppSnapshot {
           "magnificationBackend",
           "Magnification transform",
           "available",
-          "Mock preview keeps Dark and Greyscale Invert in the shared contract while native validation happens on Windows."
+          "Mock preview keeps Dark and Greyscale Invert in the shared contract while native validation happens on Windows, including related-window coverage in the shared session model."
         ),
         capability(
           "captureBackend",
@@ -369,6 +419,7 @@ function defaultSnapshot(): AppSnapshot {
     lens: {
       activePreset: null,
       activeTarget: null,
+      coveredTargets: [],
       backendLabel: "Mock transform backend",
       status: "detached",
       summary: "No effect is active in the browser preview.",
@@ -397,21 +448,58 @@ function preset(
 
 function mockLensSummary(
   preset: VisualPreset,
-  title: string,
+  activeTarget: AppSnapshot["lens"]["activeTarget"],
+  coveredTargets: AppSnapshot["lens"]["coveredTargets"],
   status: AppSnapshot["lens"]["status"]
 ) {
   const label = preset === "dark" ? "Dark" : preset === "warmDim" ? "Warm Dim" : "Greyscale Invert";
+  const visibleCount = coveredTargets.filter(
+    (target) => target.attachmentState === "available"
+  ).length;
+  const coveredCount = coveredTargets.length;
 
   switch (status) {
     case "pending":
-      return `${label} will appear when ${title} is back on screen.`;
+      return coveredCount > 1
+        ? `${label} will appear when the selected app is back on screen.`
+        : `${label} will appear when ${activeTarget?.title ?? "the selected window"} is back on screen.`;
     case "attached":
-      return `${label} is active on ${title}.`;
+      return coveredCount > 1
+        ? `${label} is active on ${Math.max(visibleCount, 1)} windows from the same app.`
+        : `${label} is active on ${activeTarget?.title ?? "the selected window"}.`;
     case "suspended":
-      return `${label} is paused for ${title}.`;
+      return coveredCount > 1
+        ? `${label} is paused for ${coveredCount} windows from the same app.`
+        : `${label} is paused for ${activeTarget?.title ?? "the selected window"}.`;
     case "detached":
       return "No effect is active in the browser preview.";
   }
+}
+
+function mockLensStatus(
+  suspended: boolean,
+  coveredTargets: AppSnapshot["lens"]["coveredTargets"]
+): AppSnapshot["lens"]["status"] {
+  if (coveredTargets.length === 0) {
+    return suspended ? "suspended" : "detached";
+  }
+
+  if (suspended) {
+    return "suspended";
+  }
+
+  return coveredTargets.some((target) => target.attachmentState === "available")
+    ? "attached"
+    : "pending";
+}
+
+function relatedWindowTargets(
+  snapshot: AppSnapshot,
+  candidate: WindowDescriptor
+): AppSnapshot["lens"]["coveredTargets"] {
+  return snapshot.settings.applyToRelatedWindows
+    ? snapshot.windowCandidates.filter((entry) => entry.processId === candidate.processId)
+    : [candidate];
 }
 
 function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
@@ -428,6 +516,16 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010002",
+      title: "IRPF 2026 - Rendimentos Tributaveis Recebidos de Pessoa Juridica",
+      executablePath: "C:\\Program Files\\IRPF\\irpf.exe",
+      processId: 4720,
+      windowClass: "SunAwtDialog",
+      bounds: { left: 284, top: 156, width: 980, height: 702 },
+      attachmentState: "available",
+      isForeground: false,
+    },
+    {
+      windowId: "0x00010003",
       title: "Bloco de Notas",
       executablePath: "C:\\Windows\\System32\\notepad.exe",
       processId: 8640,
@@ -437,7 +535,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       isForeground: false,
     },
     {
-      windowId: "0x00010003",
+      windowId: "0x00010004",
       title: "Explorador de Arquivos - Declaracoes 2026",
       executablePath: "C:\\Windows\\explorer.exe",
       processId: 3216,
@@ -447,7 +545,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       isForeground: false,
     },
     {
-      windowId: "0x00010004",
+      windowId: "0x00010005",
       title: "Visual Studio Code - glare-mute - App.tsx",
       executablePath: "C:\\Users\\dbhul\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
       processId: 7812,
@@ -457,7 +555,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       isForeground: false,
     },
     {
-      windowId: "0x00010005",
+      windowId: "0x00010006",
       title: "ReceitaNet BX - Importacao e recibos",
       executablePath: "C:\\Program Files\\Receita Federal\\ReceitaNet BX\\receitanetbx.exe",
       processId: 11028,
@@ -467,7 +565,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       isForeground: false,
     },
     {
-      windowId: "0x00010006",
+      windowId: "0x00010007",
       title: "Painel de Controle > Sistema e Seguranca > Opcoes de Energia",
       executablePath: "C:\\Windows\\System32\\control.exe",
       processId: 9188,
@@ -477,7 +575,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       isForeground: false,
     },
     {
-      windowId: "0x00010007",
+      windowId: "0x00010008",
       title: "Mozilla Firefox - Documentacao de acessibilidade e contraste visual",
       executablePath: "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
       processId: 13124,
@@ -487,7 +585,7 @@ function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
       isForeground: false,
     },
     {
-      windowId: "0x00010008",
+      windowId: "0x00010009",
       title: "LibreOffice Calc - Planejamento financeiro 2026.ods",
       executablePath: "C:\\Program Files\\LibreOffice\\program\\scalc.exe",
       processId: 14448,

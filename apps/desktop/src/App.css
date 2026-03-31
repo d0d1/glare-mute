@@ -216,7 +216,8 @@ input:disabled {
 .field-note,
 .support-actions,
 .log-meta,
-.group-heading {
+.group-heading,
+.toggle-field {
   display: flex;
   gap: 12px;
   min-width: 0;
@@ -232,9 +233,26 @@ input:disabled {
 .button-row,
 .field-note,
 .support-actions,
-.log-meta {
+.log-meta,
+.toggle-field {
   flex-wrap: wrap;
   align-items: center;
+}
+
+.toggle-field {
+  justify-content: space-between;
+}
+
+.toggle-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toggle-input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-strong);
 }
 
 .pane-copy h2,

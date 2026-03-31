@@ -19,7 +19,7 @@ import {
   watchSystemTheme,
 } from "./lib/theme";
 
-type BusyAction = "apply" | "copy" | "logs" | "pause" | "theme" | "turnOff" | null;
+type BusyAction = "apply" | "copy" | "logs" | "pause" | "settings" | "turnOff" | null;
 type StatusTone = CapabilityStatus | "neutral";
 
 const DEFAULT_PRESET: VisualPreset = "greyscaleInvert";
@@ -167,6 +167,9 @@ function App() {
   const selectedWindow =
     allWindowCandidates.find((candidate) => candidate.windowId === selectedWindowId) ?? null;
   const activeTarget = snapshot?.lens.activeTarget ?? null;
+  const coveredWindowIds = new Set(
+    snapshot?.lens.coveredTargets.map((target) => target.windowId) ?? []
+  );
   const selectedPresetDefinition =
     effectChoices.find((preset) => preset.id === selectedPreset) ?? null;
   const selectedPresetCapability = snapshot
@@ -195,7 +198,15 @@ function App() {
       return;
     }
 
-    await updateSnapshot(() => desktopClient.setThemePreference(nextTheme), "theme");
+    await updateSnapshot(() => desktopClient.setThemePreference(nextTheme), "settings");
+  }
+
+  async function handleRelatedWindowScopeChange(enabled: boolean) {
+    if (!snapshot || snapshot.settings.applyToRelatedWindows === enabled) {
+      return;
+    }
+
+    await updateSnapshot(() => desktopClient.setApplyToRelatedWindows(enabled), "settings");
   }
 
   async function handleSuspendToggle() {
@@ -300,9 +311,7 @@ function App() {
                   <WindowRow
                     candidate={candidate}
                     key={candidate.windowId}
-                    lensStatus={
-                      activeTarget?.windowId === candidate.windowId ? snapshot.lens.status : null
-                    }
+                    lensStatus={windowLensStatus(candidate, snapshot, coveredWindowIds)}
                     onSelect={() => setSelectedWindowId(candidate.windowId)}
                     selected={selectedWindowId === candidate.windowId}
                   />
@@ -429,7 +438,7 @@ function App() {
               </label>
               <select
                 className="field-select"
-                disabled={busyAction === "theme"}
+                disabled={busyAction === "settings"}
                 id="theme-select"
                 onChange={(event) => void handleThemeChange(event.target.value as ThemePreference)}
                 value={snapshot.settings.themePreference}
@@ -441,6 +450,24 @@ function App() {
                 ))}
               </select>
               <p className="body-copy">{themeDescription(snapshot.settings.themePreference)}</p>
+            </section>
+            <section className="drawer-section">
+              <label className="toggle-field" htmlFor="related-windows-toggle">
+                <div className="toggle-copy">
+                  <span className="field-label">Apply to related windows</span>
+                  <p className="body-copy">
+                    Automatically keep the effect on new windows from the same app when possible.
+                  </p>
+                </div>
+                <input
+                  checked={snapshot.settings.applyToRelatedWindows}
+                  className="toggle-input"
+                  disabled={busyAction === "settings"}
+                  id="related-windows-toggle"
+                  onChange={(event) => void handleRelatedWindowScopeChange(event.target.checked)}
+                  type="checkbox"
+                />
+              </label>
             </section>
           </div>
         </details>
@@ -765,21 +792,9 @@ function effectStatusLabel(status: AppSnapshot["lens"]["status"]) {
 }
 
 function effectMessage(snapshot: AppSnapshot) {
-  if (snapshot.lens.status === "attached" && snapshot.lens.activeTarget) {
-    return `${presetLabel(snapshot.lens.activePreset)} is active on ${snapshot.lens.activeTarget.title}.`;
-  }
-
-  if (snapshot.lens.status === "pending" && snapshot.lens.activeTarget) {
-    return `${presetLabel(snapshot.lens.activePreset)} will appear when ${snapshot.lens.activeTarget.title} is back on screen.`;
-  }
-
-  if (snapshot.lens.status === "suspended") {
-    return snapshot.lens.activeTarget
-      ? `${presetLabel(snapshot.lens.activePreset)} is paused for ${snapshot.lens.activeTarget.title}.`
-      : "The current effect is paused.";
-  }
-
-  return "Choose how the selected window should look.";
+  return snapshot.lens.status === "detached"
+    ? "Choose how the selected window should look."
+    : snapshot.lens.summary;
 }
 
 function effectStatusChip(status: AppSnapshot["lens"]["status"]): StatusTone {
@@ -867,21 +882,24 @@ function statusTone(status: CapabilityStatus): StatusTone {
   }
 }
 
-function presetLabel(preset: VisualPreset | null) {
-  switch (preset) {
-    case "dark":
-      return "Dark";
-    case "warmDim":
-      return "Warm Dim";
-    case "greyscaleInvert":
-      return "Greyscale Invert";
-    case null:
-      return "The selected effect";
-  }
-}
-
 function visibleEffectPresets(presets: PresetDefinition[]) {
   return presets.filter((preset) => preset.id !== "warmDim");
+}
+
+function windowLensStatus(
+  candidate: WindowDescriptor,
+  snapshot: AppSnapshot,
+  coveredWindowIds: Set<string>
+): AppSnapshot["lens"]["status"] | null {
+  if (!coveredWindowIds.has(candidate.windowId)) {
+    return null;
+  }
+
+  if (snapshot.lens.status === "suspended") {
+    return "suspended";
+  }
+
+  return candidate.attachmentState === "minimized" ? "pending" : "attached";
 }
 
 function windowEffectLabel(status: AppSnapshot["lens"]["status"]) {

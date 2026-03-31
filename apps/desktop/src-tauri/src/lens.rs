@@ -6,9 +6,9 @@ pub struct LensController {
 }
 
 impl LensController {
-    pub fn new(initially_suspended: bool) -> Result<Self> {
+    pub fn new(initially_suspended: bool, apply_to_related_windows: bool) -> Result<Self> {
         Ok(Self {
-            inner: LensControllerImpl::new(initially_suspended)?,
+            inner: LensControllerImpl::new(initially_suspended, apply_to_related_windows)?,
         })
     }
 
@@ -22,6 +22,14 @@ impl LensController {
 
     pub fn list_windows(&self) -> Result<Vec<WindowDescriptor>> {
         self.inner.list_windows()
+    }
+
+    pub fn set_apply_to_related_windows(
+        &self,
+        apply_to_related_windows: bool,
+    ) -> Result<LensSnapshot> {
+        self.inner
+            .set_apply_to_related_windows(apply_to_related_windows)
     }
 
     pub fn set_suspended(&self, suspended: bool) -> Result<LensSnapshot> {
@@ -45,7 +53,7 @@ mod platform {
     }
 
     impl LensControllerImpl {
-        pub fn new(initially_suspended: bool) -> Result<Self> {
+        pub fn new(initially_suspended: bool, _apply_to_related_windows: bool) -> Result<Self> {
             Ok(Self {
                 snapshot: Mutex::new(LensSnapshot {
                     status: if initially_suspended {
@@ -55,6 +63,7 @@ mod platform {
                     },
                     active_preset: None,
                     active_target: None,
+                    covered_targets: Vec::new(),
                     summary: "Native window effects only run in the Windows desktop shell."
                         .to_string(),
                     backend_label: "Preview backend".to_string(),
@@ -82,6 +91,14 @@ mod platform {
             Ok(Vec::new())
         }
 
+        pub fn set_apply_to_related_windows(&self, _enabled: bool) -> Result<LensSnapshot> {
+            Ok(self
+                .snapshot
+                .lock()
+                .expect("preview lens lock poisoned")
+                .clone())
+        }
+
         pub fn set_suspended(&self, suspended: bool) -> Result<LensSnapshot> {
             let mut snapshot = self.snapshot.lock().expect("preview lens lock poisoned");
             snapshot.status = if suspended {
@@ -104,12 +121,13 @@ mod platform {
 
 #[cfg(target_os = "windows")]
 mod platform {
+    use std::collections::HashSet;
     use std::ffi::c_void;
     use std::mem::size_of;
     use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::{self, JoinHandle};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use anyhow::{Context, Result, anyhow, bail};
     use glare_mute_core::{
@@ -145,6 +163,7 @@ mod platform {
 
     const HOST_CLASS_NAME: PCWSTR = w!("GlareMuteMagnifierHost");
     const THREAD_TICK_INTERVAL: Duration = Duration::from_millis(16);
+    const TARGET_SCAN_INTERVAL: Duration = Duration::from_millis(250);
 
     pub struct LensControllerImpl {
         command_tx: Sender<ControllerCommand>,
@@ -153,7 +172,7 @@ mod platform {
     }
 
     impl LensControllerImpl {
-        pub fn new(initially_suspended: bool) -> Result<Self> {
+        pub fn new(initially_suspended: bool, apply_to_related_windows: bool) -> Result<Self> {
             let shared_snapshot = Arc::new(Mutex::new(LensSnapshot {
                 status: if initially_suspended {
                     LensStatus::Suspended
@@ -162,6 +181,7 @@ mod platform {
                 },
                 active_preset: None,
                 active_target: None,
+                covered_targets: Vec::new(),
                 summary: if initially_suspended {
                     "The current effect is paused.".to_string()
                 } else {
@@ -175,7 +195,9 @@ mod platform {
             let worker = thread::Builder::new()
                 .name("glaremute-lens".to_string())
                 .spawn(move || {
-                    if let Err(error) = lens_thread_main(command_rx, worker_snapshot) {
+                    if let Err(error) =
+                        lens_thread_main(command_rx, worker_snapshot, apply_to_related_windows)
+                    {
                         tracing::error!(?error, "lens worker failed");
                     }
                 })
@@ -227,6 +249,21 @@ mod platform {
             enumerate_attachable_windows()
         }
 
+        pub fn set_apply_to_related_windows(&self, enabled: bool) -> Result<LensSnapshot> {
+            let (response_tx, response_rx) = mpsc::channel();
+            self.command_tx
+                .send(ControllerCommand::SetApplyToRelatedWindows {
+                    enabled,
+                    response_tx,
+                })
+                .context("failed to send related-window command to lens worker")?;
+            response_rx
+                .recv()
+                .context("failed to receive related-window confirmation from lens worker")??;
+
+            self.snapshot()
+        }
+
         pub fn set_suspended(&self, suspended: bool) -> Result<LensSnapshot> {
             let (response_tx, response_rx) = mpsc::channel();
             self.command_tx
@@ -269,6 +306,10 @@ mod platform {
         Detach {
             response_tx: Sender<Result<()>>,
         },
+        SetApplyToRelatedWindows {
+            enabled: bool,
+            response_tx: Sender<Result<()>>,
+        },
         SetSuspended {
             suspended: bool,
             response_tx: Sender<Result<()>>,
@@ -276,14 +317,27 @@ mod platform {
         Shutdown,
     }
 
-    struct WorkerState {
-        magnifier_hwnd: HWND,
+    struct AttachmentSession {
+        active_window_id: String,
+        process_id: u32,
+        preset: VisualPreset,
+    }
+
+    struct OverlaySurface {
+        target_window_id: String,
+        target_hwnd: HWND,
         host_hwnd: HWND,
+        magnifier_hwnd: HWND,
+    }
+
+    struct WorkerState {
         shared_snapshot: Arc<Mutex<LensSnapshot>>,
-        current_target: Option<WindowDescriptor>,
-        current_target_hwnd: Option<HWND>,
-        current_preset: Option<VisualPreset>,
+        session: Option<AttachmentSession>,
+        covered_targets: Vec<WindowDescriptor>,
+        surfaces: Vec<OverlaySurface>,
         suspended: bool,
+        apply_to_related_windows: bool,
+        last_target_scan: Instant,
     }
 
     struct PresentationTarget {
@@ -294,12 +348,13 @@ mod platform {
     fn lens_thread_main(
         command_rx: Receiver<ControllerCommand>,
         shared_snapshot: Arc<Mutex<LensSnapshot>>,
+        apply_to_related_windows: bool,
     ) -> Result<()> {
         unsafe {
             ensure_bool(MagInitialize(), "failed to initialize Magnification API")?;
         }
 
-        let mut runtime = match WorkerState::create(shared_snapshot) {
+        let mut runtime = match WorkerState::create(shared_snapshot, apply_to_related_windows) {
             Ok(runtime) => runtime,
             Err(error) => {
                 unsafe {
@@ -324,6 +379,13 @@ mod platform {
                 }
                 Ok(ControllerCommand::Detach { response_tx }) => {
                     let result = runtime.detach();
+                    let _ = response_tx.send(result);
+                }
+                Ok(ControllerCommand::SetApplyToRelatedWindows {
+                    enabled,
+                    response_tx,
+                }) => {
+                    let result = runtime.set_apply_to_related_windows(enabled);
                     let _ = response_tx.send(result);
                 }
                 Ok(ControllerCommand::SetSuspended {
@@ -353,9 +415,377 @@ mod platform {
     }
 
     impl WorkerState {
-        fn create(shared_snapshot: Arc<Mutex<LensSnapshot>>) -> Result<Self> {
+        fn create(
+            shared_snapshot: Arc<Mutex<LensSnapshot>>,
+            apply_to_related_windows: bool,
+        ) -> Result<Self> {
             register_host_window_class()?;
 
+            Ok(Self {
+                shared_snapshot,
+                session: None,
+                covered_targets: Vec::new(),
+                surfaces: Vec::new(),
+                suspended: false,
+                apply_to_related_windows,
+                last_target_scan: Instant::now() - TARGET_SCAN_INTERVAL,
+            })
+        }
+
+        fn attach(&mut self, descriptor: WindowDescriptor, preset: VisualPreset) -> Result<()> {
+            let target_hwnd = parse_window_id(&descriptor.window_id)?;
+            if unsafe { !IsWindow(Some(target_hwnd)).as_bool() } {
+                bail!("The selected window is no longer valid.");
+            }
+
+            tracing::info!(
+                window_id = %descriptor.window_id,
+                title = %descriptor.title,
+                preset = ?preset,
+                process_id = descriptor.process_id,
+                apply_to_related_windows = self.apply_to_related_windows,
+                "attaching magnifier backend"
+            );
+
+            self.session = Some(AttachmentSession {
+                active_window_id: descriptor.window_id.clone(),
+                process_id: descriptor.process_id,
+                preset,
+            });
+            self.last_target_scan = Instant::now() - TARGET_SCAN_INTERVAL;
+            self.sync_targets(true)?;
+
+            if self.session.is_none() {
+                bail!("The selected window is no longer available.");
+            }
+
+            self.tick();
+            Ok(())
+        }
+
+        fn detach(&mut self) -> Result<()> {
+            self.suspended = false;
+            self.clear_session()?;
+            self.update_shared_snapshot();
+            tracing::info!("detached magnifier backend");
+            Ok(())
+        }
+
+        fn set_apply_to_related_windows(&mut self, enabled: bool) -> Result<()> {
+            if self.apply_to_related_windows == enabled {
+                self.update_shared_snapshot();
+                return Ok(());
+            }
+
+            self.apply_to_related_windows = enabled;
+            self.last_target_scan = Instant::now() - TARGET_SCAN_INTERVAL;
+            self.sync_targets(true)?;
+            self.update_shared_snapshot();
+            tracing::info!(enabled, "updated related window coverage");
+            Ok(())
+        }
+
+        fn set_suspended(&mut self, suspended: bool) -> Result<()> {
+            self.suspended = suspended;
+            if suspended {
+                self.hide_all_surfaces();
+            } else {
+                self.last_target_scan = Instant::now() - TARGET_SCAN_INTERVAL;
+                self.sync_targets(true)?;
+            }
+
+            self.update_shared_snapshot();
+            tracing::info!(suspended, "updated lens suspended state");
+            Ok(())
+        }
+
+        fn tick(&mut self) {
+            if let Err(error) = self.sync_targets(false) {
+                tracing::warn!(?error, "failed to refresh related window coverage");
+                let _ = self.clear_session();
+                self.update_shared_snapshot();
+                return;
+            }
+
+            if self.suspended {
+                self.hide_all_surfaces();
+                return;
+            }
+
+            for surface in &mut self.surfaces {
+                match presentation_target(surface.target_hwnd, surface.host_hwnd) {
+                    Ok(Some(target)) => {
+                        if let Err(error) = surface.present(target) {
+                            tracing::warn!(?error, "failed to update magnifier overlay");
+                        }
+                    }
+                    Ok(None) => surface.hide(),
+                    Err(error) => {
+                        tracing::warn!(?error, "target window became unavailable");
+                        surface.hide();
+                    }
+                }
+            }
+        }
+
+        fn cleanup(&mut self) -> Result<()> {
+            self.clear_session()
+        }
+
+        fn sync_targets(&mut self, force: bool) -> Result<()> {
+            if !force && self.last_target_scan.elapsed() < TARGET_SCAN_INTERVAL {
+                return Ok(());
+            }
+            self.last_target_scan = Instant::now();
+
+            let Some(session) = self.session.as_ref() else {
+                return Ok(());
+            };
+
+            let active_window_id = session.active_window_id.clone();
+            let process_id = session.process_id;
+            let preset = session.preset;
+            let mut covered_targets = enumerate_attachable_windows()?
+                .into_iter()
+                .filter(|candidate| {
+                    if self.apply_to_related_windows {
+                        candidate.process_id == process_id
+                    } else {
+                        candidate.window_id == active_window_id
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            if covered_targets.is_empty() {
+                tracing::info!(
+                    process_id,
+                    "no covered windows remain for the current session"
+                );
+                self.clear_session()?;
+                self.update_shared_snapshot();
+                return Ok(());
+            }
+
+            if !covered_targets
+                .iter()
+                .any(|candidate| candidate.window_id == active_window_id)
+            {
+                if let Some(session) = self.session.as_mut() {
+                    session.active_window_id = covered_targets[0].window_id.clone();
+                }
+            }
+
+            self.covered_targets.clear();
+            self.covered_targets.append(&mut covered_targets);
+            self.reconcile_surfaces(preset)?;
+            self.update_shared_snapshot();
+            Ok(())
+        }
+
+        fn reconcile_surfaces(&mut self, preset: VisualPreset) -> Result<()> {
+            let desired_targets = self
+                .covered_targets
+                .iter()
+                .filter(|candidate| candidate.attachment_state == WindowAttachmentState::Available)
+                .cloned()
+                .collect::<Vec<_>>();
+
+            let desired_ids = desired_targets
+                .iter()
+                .map(|candidate| candidate.window_id.clone())
+                .collect::<HashSet<_>>();
+
+            let mut retained_surfaces = Vec::with_capacity(self.surfaces.len());
+            for surface in self.surfaces.drain(..) {
+                if desired_ids.contains(&surface.target_window_id) {
+                    retained_surfaces.push(surface);
+                } else if let Err(error) = surface.destroy() {
+                    tracing::warn!(?error, "failed to destroy retired magnifier surface");
+                }
+            }
+            self.surfaces = retained_surfaces;
+
+            for surface in &mut self.surfaces {
+                surface.set_effect(preset)?;
+            }
+
+            for descriptor in desired_targets {
+                if self
+                    .surfaces
+                    .iter()
+                    .any(|surface| surface.target_window_id == descriptor.window_id)
+                {
+                    continue;
+                }
+
+                self.surfaces
+                    .push(OverlaySurface::create(&descriptor, preset)?);
+            }
+
+            self.refresh_filter_lists()?;
+            Ok(())
+        }
+
+        fn refresh_filter_lists(&mut self) -> Result<()> {
+            if self.surfaces.is_empty() {
+                return Ok(());
+            }
+
+            let host_windows = self
+                .surfaces
+                .iter()
+                .map(|entry| entry.host_hwnd)
+                .collect::<Vec<_>>();
+            for surface in &mut self.surfaces {
+                let mut filter_windows = host_windows.clone();
+                unsafe {
+                    ensure_bool(
+                        MagSetWindowFilterList(
+                            surface.magnifier_hwnd,
+                            MW_FILTERMODE_EXCLUDE,
+                            filter_windows.len() as i32,
+                            filter_windows.as_mut_ptr(),
+                        ),
+                        "failed to exclude overlay windows from magnification",
+                    )?;
+                }
+            }
+
+            Ok(())
+        }
+
+        fn clear_session(&mut self) -> Result<()> {
+            self.covered_targets.clear();
+            self.session = None;
+
+            for surface in self.surfaces.drain(..) {
+                surface.destroy()?;
+            }
+
+            Ok(())
+        }
+
+        fn hide_all_surfaces(&self) {
+            for surface in &self.surfaces {
+                surface.hide();
+            }
+        }
+
+        fn active_target(&self) -> Option<WindowDescriptor> {
+            let session = self.session.as_ref()?;
+            self.covered_targets
+                .iter()
+                .find(|candidate| candidate.window_id == session.active_window_id)
+                .cloned()
+                .or_else(|| self.covered_targets.first().cloned())
+        }
+
+        fn active_preset(&self) -> Option<VisualPreset> {
+            self.session.as_ref().map(|session| session.preset)
+        }
+
+        fn status(&self) -> LensStatus {
+            if self.session.is_none() {
+                return if self.suspended {
+                    LensStatus::Suspended
+                } else {
+                    LensStatus::Detached
+                };
+            }
+
+            if self.suspended {
+                return LensStatus::Suspended;
+            }
+
+            if self
+                .covered_targets
+                .iter()
+                .any(|candidate| candidate.attachment_state == WindowAttachmentState::Available)
+            {
+                LensStatus::Attached
+            } else {
+                LensStatus::Pending
+            }
+        }
+
+        fn update_shared_snapshot(&self) {
+            let status = self.status();
+            let active_target = self.active_target();
+            let active_preset = self.active_preset();
+            let visible_count = self
+                .covered_targets
+                .iter()
+                .filter(|candidate| candidate.attachment_state == WindowAttachmentState::Available)
+                .count();
+            let covered_count = self.covered_targets.len();
+            let summary = match status {
+                LensStatus::Detached => "No effect is active.".to_string(),
+                LensStatus::Pending => {
+                    if covered_count > 1 {
+                        format!(
+                            "{} will appear when the selected app is back on screen.",
+                            preset_label(active_preset)
+                        )
+                    } else {
+                        let target = active_target
+                            .as_ref()
+                            .map(|entry| entry.title.as_str())
+                            .unwrap_or("the selected window");
+                        format!(
+                            "{} will appear when {target} is back on screen.",
+                            preset_label(active_preset)
+                        )
+                    }
+                }
+                LensStatus::Attached => {
+                    if covered_count > 1 {
+                        format!(
+                            "{} is active on {} windows from the same app.",
+                            preset_label(active_preset),
+                            visible_count.max(1)
+                        )
+                    } else {
+                        let target = active_target
+                            .as_ref()
+                            .map(|entry| entry.title.as_str())
+                            .unwrap_or("the selected window");
+                        format!("{} is active on {target}.", preset_label(active_preset))
+                    }
+                }
+                LensStatus::Suspended => {
+                    if covered_count > 1 {
+                        format!(
+                            "{} is paused for {} windows from the same app.",
+                            preset_label(active_preset),
+                            covered_count
+                        )
+                    } else if let Some(target) = active_target.as_ref() {
+                        format!(
+                            "{} is paused for {}.",
+                            preset_label(active_preset),
+                            target.title
+                        )
+                    } else {
+                        "The current effect is paused.".to_string()
+                    }
+                }
+            };
+
+            let mut snapshot = self
+                .shared_snapshot
+                .lock()
+                .expect("lens snapshot lock poisoned");
+            snapshot.status = status;
+            snapshot.active_target = active_target;
+            snapshot.active_preset = active_preset;
+            snapshot.covered_targets = self.covered_targets.clone();
+            snapshot.summary = summary;
+            snapshot.backend_label = "Windows Magnification backend".to_string();
+        }
+    }
+
+    impl OverlaySurface {
+        fn create(target: &WindowDescriptor, preset: VisualPreset) -> Result<Self> {
             let instance = unsafe {
                 GetModuleHandleW(None).context("failed to resolve module handle for host window")?
             };
@@ -410,56 +840,26 @@ mod platform {
             }
             .context("failed to create magnifier control")?;
 
-            let mut filter_windows = [host_hwnd];
-            unsafe {
-                ensure_bool(
-                    MagSetWindowFilterList(
-                        magnifier_hwnd,
-                        MW_FILTERMODE_EXCLUDE,
-                        filter_windows.len() as i32,
-                        filter_windows.as_mut_ptr(),
-                    ),
-                    "failed to exclude the host window from magnification",
-                )?;
-            }
-
             let mut transform = identity_transform();
             unsafe {
                 ensure_bool(
                     MagSetWindowTransform(magnifier_hwnd, &mut transform),
                     "failed to configure magnifier transform",
                 )?;
-                let _ = ShowWindow(host_hwnd, SW_HIDE);
             }
 
-            Ok(Self {
-                magnifier_hwnd,
+            let mut surface = Self {
+                target_window_id: target.window_id.clone(),
+                target_hwnd: parse_window_id(&target.window_id)?,
                 host_hwnd,
-                shared_snapshot,
-                current_target: None,
-                current_target_hwnd: None,
-                current_preset: None,
-                suspended: false,
-            })
+                magnifier_hwnd,
+            };
+            surface.set_effect(preset)?;
+            surface.hide();
+            Ok(surface)
         }
 
-        fn attach(&mut self, descriptor: WindowDescriptor, preset: VisualPreset) -> Result<()> {
-            let target_hwnd = parse_window_id(&descriptor.window_id)?;
-            if unsafe { !IsWindow(Some(target_hwnd)).as_bool() } {
-                bail!("The selected window is no longer valid.");
-            }
-
-            tracing::info!(
-                window_id = %descriptor.window_id,
-                title = %descriptor.title,
-                preset = ?preset,
-                "attaching magnifier backend"
-            );
-
-            self.current_target = Some(descriptor.clone());
-            self.current_target_hwnd = Some(target_hwnd);
-            self.current_preset = Some(preset);
-
+        fn set_effect(&mut self, preset: VisualPreset) -> Result<()> {
             let mut effect = effect_for_preset(preset)?;
             unsafe {
                 ensure_bool(
@@ -468,134 +868,15 @@ mod platform {
                 )?;
             }
 
-            self.update_shared_snapshot(
-                if descriptor.attachment_state == WindowAttachmentState::Minimized {
-                    LensStatus::Pending
-                } else {
-                    LensStatus::Attached
-                },
-                Some(descriptor),
-                Some(preset),
-            );
-            self.tick();
             Ok(())
         }
 
-        fn detach(&mut self) -> Result<()> {
-            self.current_target = None;
-            self.current_target_hwnd = None;
-            self.current_preset = None;
-
-            unsafe {
-                let _ = ShowWindow(self.host_hwnd, SW_HIDE);
-            }
-
-            self.update_shared_snapshot(LensStatus::Detached, None, None);
-            tracing::info!("detached magnifier backend");
-            Ok(())
-        }
-
-        fn set_suspended(&mut self, suspended: bool) -> Result<()> {
-            self.suspended = suspended;
-            if suspended {
-                unsafe {
-                    let _ = ShowWindow(self.host_hwnd, SW_HIDE);
-                }
-            }
-
-            let status = if suspended {
-                LensStatus::Suspended
-            } else if let Some(target) = self.current_target.as_ref() {
-                if target.attachment_state == WindowAttachmentState::Minimized {
-                    LensStatus::Pending
-                } else {
-                    LensStatus::Attached
-                }
-            } else {
-                LensStatus::Detached
-            };
-
-            self.update_shared_snapshot(status, self.current_target.clone(), self.current_preset);
-            tracing::info!(suspended, "updated lens suspended state");
-            Ok(())
-        }
-
-        fn tick(&mut self) {
-            let Some(target_hwnd) = self.current_target_hwnd else {
-                return;
-            };
-
-            if self.suspended {
-                unsafe {
-                    let _ = ShowWindow(self.host_hwnd, SW_HIDE);
-                }
-                return;
-            }
-
-            let descriptor = match describe_window(target_hwnd) {
-                Ok(Some(descriptor)) => descriptor,
-                Ok(None) => {
-                    tracing::warn!("target window became unavailable");
-                    let _ = self.detach();
-                    return;
-                }
-                Err(error) => {
-                    tracing::warn!(?error, "target window became unavailable");
-                    let _ = self.detach();
-                    return;
-                }
-            };
-
-            let target_changed = self.current_target.as_ref() != Some(&descriptor);
-            self.current_target = Some(descriptor.clone());
-            let status = if descriptor.attachment_state == WindowAttachmentState::Minimized {
-                LensStatus::Pending
-            } else {
-                LensStatus::Attached
-            };
-
-            if target_changed || self.snapshot_status() != status {
-                self.update_shared_snapshot(status, Some(descriptor.clone()), self.current_preset);
-            }
-
-            if descriptor.attachment_state == WindowAttachmentState::Minimized {
-                unsafe {
-                    let _ = ShowWindow(self.host_hwnd, SW_HIDE);
-                }
-                return;
-            }
-
-            match presentation_target(target_hwnd, self.host_hwnd) {
-                Ok(Some(target)) => {
-                    if let Err(error) = self.present_target(target) {
-                        tracing::warn!(?error, "failed to update magnifier overlay");
-                    }
-                }
-                Ok(None) => unsafe {
-                    let _ = ShowWindow(self.host_hwnd, SW_HIDE);
-                },
-                Err(error) => {
-                    tracing::warn!(?error, "target window became unavailable");
-                    let _ = self.detach();
-                }
-            }
-        }
-
-        fn snapshot_status(&self) -> LensStatus {
-            self.shared_snapshot
-                .lock()
-                .expect("lens snapshot lock poisoned")
-                .status
-        }
-
-        fn present_target(&mut self, target: PresentationTarget) -> Result<()> {
+        fn present(&mut self, target: PresentationTarget) -> Result<()> {
             let rect = target.rect;
             let width = rect.right - rect.left;
             let height = rect.bottom - rect.top;
             if width <= 0 || height <= 0 {
-                unsafe {
-                    let _ = ShowWindow(self.host_hwnd, SW_HIDE);
-                }
+                self.hide();
                 return Ok(());
             }
 
@@ -630,7 +911,13 @@ mod platform {
             Ok(())
         }
 
-        fn cleanup(&mut self) -> Result<()> {
+        fn hide(&self) {
+            unsafe {
+                let _ = ShowWindow(self.host_hwnd, SW_HIDE);
+            }
+        }
+
+        fn destroy(self) -> Result<()> {
             unsafe {
                 let _ = ShowWindow(self.host_hwnd, SW_HIDE);
                 DestroyWindow(self.magnifier_hwnd)
@@ -640,55 +927,6 @@ mod platform {
             }
 
             Ok(())
-        }
-
-        fn update_shared_snapshot(
-            &self,
-            status: LensStatus,
-            active_target: Option<WindowDescriptor>,
-            active_preset: Option<VisualPreset>,
-        ) {
-            let summary = match status {
-                LensStatus::Detached => "No effect is active.".to_string(),
-                LensStatus::Pending => {
-                    let target = active_target
-                        .as_ref()
-                        .map(|entry| entry.title.as_str())
-                        .unwrap_or("the selected window");
-                    format!(
-                        "{} will appear when {target} is back on screen.",
-                        preset_label(active_preset)
-                    )
-                }
-                LensStatus::Attached => {
-                    let target = active_target
-                        .as_ref()
-                        .map(|entry| entry.title.as_str())
-                        .unwrap_or("the selected window");
-                    format!("{} is active on {target}.", preset_label(active_preset))
-                }
-                LensStatus::Suspended => {
-                    if let Some(target) = active_target.as_ref() {
-                        format!(
-                            "{} is paused for {}.",
-                            preset_label(active_preset),
-                            target.title
-                        )
-                    } else {
-                        "The current effect is paused.".to_string()
-                    }
-                }
-            };
-
-            let mut snapshot = self
-                .shared_snapshot
-                .lock()
-                .expect("lens snapshot lock poisoned");
-            snapshot.status = status;
-            snapshot.active_target = active_target;
-            snapshot.active_preset = active_preset;
-            snapshot.summary = summary;
-            snapshot.backend_label = "Windows Magnification backend".to_string();
         }
     }
 

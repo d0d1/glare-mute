@@ -47,6 +47,16 @@ pub fn set_theme_preference(
 }
 
 #[tauri::command]
+pub fn set_apply_to_related_windows(
+    state: State<'_, ManagedState>,
+    enabled: bool,
+) -> Result<AppSnapshot, String> {
+    state
+        .set_apply_to_related_windows(enabled)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn toggle_suspend(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
     state.toggle_suspend().map_err(|error| error.to_string())
 }

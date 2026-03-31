@@ -52,7 +52,10 @@ impl ManagedState {
         let log_file = log_directory.join(LOG_FILE_NAME);
         let settings = load_settings(&settings_file)?;
         let webview_version = tauri::webview_version().ok();
-        let lens = LensController::new(settings.suspend_on_startup)?;
+        let lens = LensController::new(
+            settings.suspend_on_startup,
+            settings.apply_to_related_windows,
+        )?;
 
         Ok(Self {
             settings_store: Mutex::new(SettingsStore {
@@ -87,6 +90,29 @@ impl ManagedState {
             RuntimeEventLevel::Info,
             "settings".to_string(),
             format!("theme preference updated to {:?}", theme),
+        );
+
+        self.snapshot_with_settings(snapshot)
+    }
+
+    pub fn set_apply_to_related_windows(&self, enabled: bool) -> Result<AppSnapshot> {
+        let snapshot = {
+            let mut store = self.settings_store.lock().expect("settings lock poisoned");
+            store.current.apply_to_related_windows = enabled;
+            persist_settings(&self.settings_file, &store.current)?;
+            store.current.clone()
+        };
+
+        self.lens.set_apply_to_related_windows(enabled)?;
+
+        self.record_event(
+            RuntimeEventLevel::Info,
+            "settings".to_string(),
+            if enabled {
+                "related window coverage enabled".to_string()
+            } else {
+                "related window coverage disabled".to_string()
+            },
         );
 
         self.snapshot_with_settings(snapshot)
