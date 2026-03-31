@@ -2,6 +2,30 @@ import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState }
 
 export type ChoiceOption = { label: string; value: string };
 
+const MAX_VISIBLE_MENU_OPTIONS = 6;
+const ESTIMATED_OPTION_HEIGHT = 44;
+const ESTIMATED_MENU_CHROME_HEIGHT = 16;
+const MAX_MENU_HEIGHT = 252;
+
+function estimatedMenuHeight(optionCount: number) {
+  const visibleOptionCount = Math.min(Math.max(optionCount, 1), MAX_VISIBLE_MENU_OPTIONS);
+  const estimatedHeight =
+    visibleOptionCount * ESTIMATED_OPTION_HEIGHT + ESTIMATED_MENU_CHROME_HEIGHT;
+
+  return Math.min(estimatedHeight, MAX_MENU_HEIGHT);
+}
+
+function shouldOpenUpward(
+  triggerRect: Pick<DOMRect, "top" | "bottom">,
+  viewportHeight: number,
+  menuHeight: number
+) {
+  const spaceBelow = viewportHeight - triggerRect.bottom;
+  const spaceAbove = triggerRect.top;
+
+  return spaceBelow < menuHeight && spaceAbove > spaceBelow;
+}
+
 export function ChoiceField({
   disabled,
   id,
@@ -69,22 +93,16 @@ export function ChoiceField({
 
     const updateDirection = () => {
       const trigger = triggerRef.current;
-      const menu = menuRef.current;
-
       if (!trigger) {
         return;
       }
 
       const rect = trigger.getBoundingClientRect();
-      const estimatedHeight =
-        menu?.offsetHeight ?? Math.min(Math.max(options.length, 1), 6) * 44 + 16;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
+      const menuHeight =
+        menuRef.current?.getBoundingClientRect().height ?? estimatedMenuHeight(options.length);
 
-      setOpenUpward(spaceBelow < estimatedHeight && spaceAbove > spaceBelow);
+      setOpenUpward(shouldOpenUpward(rect, window.innerHeight, menuHeight));
     };
-
-    updateDirection();
 
     const raf = window.requestAnimationFrame(() => {
       updateDirection();
@@ -122,6 +140,33 @@ export function ChoiceField({
     optionRefs.current.get(nextOption.value)?.focus();
   }
 
+  function resolveOpenDirection() {
+    const trigger = triggerRef.current;
+    if (!trigger) {
+      return false;
+    }
+
+    return shouldOpenUpward(
+      trigger.getBoundingClientRect(),
+      window.innerHeight,
+      estimatedMenuHeight(options.length)
+    );
+  }
+
+  function openMenu() {
+    setOpenUpward(resolveOpenDirection());
+    setOpen(true);
+  }
+
+  function handleTriggerClick() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+
+    openMenu();
+  }
+
   function handleTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
     if (disabled) {
       return;
@@ -134,7 +179,7 @@ export function ChoiceField({
       event.key === " "
     ) {
       event.preventDefault();
-      setOpen(true);
+      openMenu();
     }
   }
 
@@ -193,7 +238,7 @@ export function ChoiceField({
         data-open={open ? "true" : "false"}
         disabled={disabled || !selectedOption}
         id={id}
-        onClick={() => setOpen((current) => !current)}
+        onClick={handleTriggerClick}
         onKeyDown={handleTriggerKeyDown}
         ref={triggerRef}
         type="button"
