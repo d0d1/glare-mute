@@ -2,7 +2,7 @@
 
 ## Root
 
-- `package.json`: root automation for installs, linting, Playwright, and agent diagnostics.
+- `package.json`: root automation for installs, linting, Playwright, and local verification.
 - `Cargo.toml`: Rust workspace for the desktop shell and shared crates.
 - `playwright.config.ts`: browser-preview review harness.
 - `scripts/`: repo-level automation that avoids global tooling.

@@ -1,6 +1,6 @@
 # Debugging Workflow
 
-Glare mute is designed so agents can inspect failures locally before asking for user help.
+Glare mute exposes enough local diagnostics to inspect most failures before asking for extra environment detail.
 
 ## First places to look
 
@@ -42,4 +42,4 @@ Use the `Copy Debug Report` action to capture a snapshot that includes:
 3. Check the diagnostics panel before inspecting raw files.
 4. Confirm the active target window id, title, executable path, and class before assuming picker failure.
 5. Open the logs directory if the in-app event buffer is not enough.
-6. Escalate to the user only when the bug depends on an environment detail the app cannot report itself.
+6. Ask for extra environment detail only when the app cannot report enough on its own.

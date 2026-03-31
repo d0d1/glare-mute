@@ -23,6 +23,6 @@ Use:
 
 ## Consequences
 
-- agents can run the UI in a pure browser preview for Playwright review
+- the UI can run in a pure browser preview for Playwright review
 - Windows backend work stays in Rust where it belongs
 - the frontend remains testable without launching a real desktop app for every change

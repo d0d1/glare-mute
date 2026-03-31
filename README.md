@@ -5,10 +5,10 @@ Glare mute is an open-source Windows accessibility lens for bright legacy apps t
 The first native test slice is intentionally narrow:
 
 - keep a live, stable list of top-level Windows app windows, including minimized ones
-- apply either `Greyscale Invert` or `Invert` to one selected main window
+- apply either `Invert` or `Greyscale Invert` to a selected app window and related windows when possible
 - turn off the effect quickly from the app window or tray
 
-The repository is intentionally shaped for agent-driven development:
+The repository is intentionally shaped for fast Windows iteration and repeatable local verification:
 
 - `Tauri 2 + Rust + React/TypeScript`
 - a browser-preview mode that shares the same desktop command contract

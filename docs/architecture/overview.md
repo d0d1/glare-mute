@@ -6,7 +6,7 @@ That split is deliberate:
 
 - the desktop shell needs native tray, window, path, and logging integrations
 - the UI needs fast iteration and automated visual review
-- agents need a way to exercise the interface without depending on a native desktop runtime for every change
+- developers need a way to exercise the interface without depending on a native desktop runtime for every change
 
 ## Major layers
 
