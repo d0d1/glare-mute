@@ -1,84 +1,62 @@
 # Glare mute
 
-Glare mute is an open-source Windows accessibility lens for bright legacy apps that ignore dark mode and contrast settings.
+Glare mute is a Windows accessibility app for people who need bright apps toned down without changing the rest of the desktop.
 
-The first native test slice is intentionally narrow:
+## What it does
 
-- keep a live, stable list of top-level Windows app windows, including minimized ones
-- apply either `Invert` or `Greyscale Invert` to a selected app window and related windows when possible
-- turn off the effect quickly from the app window or tray
+- shows a live list of windows you can target
+- applies **Invert** or **Greyscale Invert** to the selected window
+- can keep the effect on related windows from the same app when that is reliable
+- lets you turn the effect off quickly from the app or tray
 
-The repository is intentionally shaped for fast Windows iteration and repeatable local verification:
+## Current scope
 
-- `Tauri 2 + Rust + React/TypeScript`
-- a browser-preview mode that shares the same desktop command contract
-- first-class diagnostics in dev builds and on disk
-- screenshot-backed browser review against a deterministic preview server
-- local installs only, with repo-managed tooling wherever possible
-- package-manager cache kept under `.cache/pnpm`
-- icon generation scripted through a repo-local Python venv under `.cache`
+Glare mute is currently focused on a narrow Windows v1:
 
-## Project rules
+- Windows desktop app
+- real per-window effects for bright apps that ignore dark mode
+- current built-in effects: **Invert** and **Greyscale Invert**
 
-- Windows-only v1
-- tray-first UX
-- accessibility lens, not theme injection
-- tint backend plus transform backend
-- GPL-3.0-only
-- Conventional Commits 1.0.0
+## Preview
 
-## Quick start
+A typical use case is a bright legacy tax app that stays white even when the rest of Windows is dark.
 
-For the browser preview:
+### Original
 
-```bash
-corepack pnpm install
-corepack pnpm playwright:install
-corepack pnpm dev:web
-```
+![Bright IRPF window before applying an effect](docs/images/01_irpf_original.png)
 
-This serves the live iteration surface on `http://127.0.0.1:1420`.
+### Invert applied
 
-When this repo is shared between WSL and Windows, install dependencies once after pulling changes so the workspace picks up both the current Linux tooling and the Windows-native Tauri CLI binding:
+![IRPF window with Glare mute invert applied](docs/images/02_irpf_inverted.png)
 
-```bash
-corepack pnpm install
-```
+## How to use
 
-For the Windows desktop shell from this repo layout:
+1. Open the app you want to soften.
+2. Open Glare mute and pick that window from the list.
+3. Choose **Invert** or **Greyscale Invert**.
+4. Apply the effect.
+5. Turn it off when you are done.
 
-```bash
-cmd.exe /c "cd /d C:\Users\dbhul\code\glare-mute && set TAURI_DEV_HOST=127.0.0.1 && cargo run -p glare-mute-desktop"
-```
+## Privacy and local processing
 
-That direct path still works, but the workspace is also configured to install the Windows-native Tauri CLI binding so `tauri:build` and other Windows CLI flows can run from the same shared repo after a normal install.
+Glare mute is local software.
 
-To regenerate the app and tray icon assets:
+- no telemetry
+- no analytics
+- no account required
+- no subscription
+- no runtime dependency on external services
+- window targeting and effect handling happen on your own machine
 
-```bash
-python3 -m venv .cache/python/icon-tools
-.cache/python/icon-tools/bin/pip install pillow
-.cache/python/icon-tools/bin/python scripts/generate_icons.py
-```
+## Platform support
 
-## Verification
+- **Windows:** supported target platform for the current app
+- **Other platforms:** not supported in the current release scope
 
-```bash
-corepack pnpm build:web
-corepack pnpm test:unit
-corepack pnpm test:e2e
-cargo test -p glare-mute-core -p glare-mute-platform
-cargo check -p glare-mute-desktop
-```
+## Install / release status
 
-`corepack pnpm test:e2e` builds the web app and runs Playwright against a separate preview server on `http://127.0.0.1:1421`, so screenshot review does not depend on a dev server already running.
+Glare mute is still in an early Windows-first release stage. The repository can build a production desktop executable, but the project is still being tightened before a broader end-user release.
 
-## Documentation
+## License
 
-- [Documentation index](./docs/README.md)
-- [Repository map](./docs/repo-map.md)
-- [Architecture overview](./docs/architecture/overview.md)
-- [Debugging workflow](./docs/operations/debugging.md)
-- [Development workflow](./docs/contributing/development.md)
-- [Release workflow](./docs/contributing/releasing.md)
-- [Windows IRPF test flow](./docs/operations/windows-irpf-test.md)
+GPL-3.0-only

@@ -681,6 +681,10 @@ fn build_logical_target(
         canonical_target_sort_key(right).cmp(&canonical_target_sort_key(left))
     });
     let canonical_target = raw_targets.first()?.clone();
+    if !should_surface_logical_target(&canonical_target) {
+        return None;
+    }
+
     let allows_related_window_expansion = !raw_targets.iter().any(is_ambiguous_host_candidate);
     let related_group_key = if allows_related_window_expansion {
         format!("process:{}", canonical_target.process_id)
@@ -807,6 +811,22 @@ fn canonical_target_sort_key(candidate: &RawWindowCandidate) -> (u8, u8, u8, u8,
     )
 }
 
+fn should_surface_logical_target(candidate: &RawWindowCandidate) -> bool {
+    let normalized_title = normalize_title(&candidate.title);
+    let executable_name = executable_basename(candidate.executable_path.as_deref())
+        .map(|name| name.to_ascii_lowercase());
+
+    if normalized_title == "windows input experience" {
+        return false;
+    }
+
+    if normalized_title == "explorer.exe" && executable_name.as_deref() == Some("explorer.exe") {
+        return false;
+    }
+
+    true
+}
+
 fn logical_window_sort_key(descriptor: &WindowDescriptor) -> (String, String, String) {
     (
         descriptor.title.to_lowercase(),
@@ -817,4 +837,53 @@ fn logical_window_sort_key(descriptor: &WindowDescriptor) -> (String, String, St
             .to_lowercase(),
         descriptor.logical_target_id.to_lowercase(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glare_mute_core::WindowBounds;
+
+    fn raw_candidate(title: &str, executable_path: Option<&str>) -> RawWindowCandidate {
+        RawWindowCandidate {
+            window_id: "0x1000".to_string(),
+            title: title.to_string(),
+            executable_path: executable_path.map(ToString::to_string),
+            process_id: 4242,
+            window_class: Some("CabinetWClass".to_string()),
+            bounds: WindowBounds {
+                left: 0,
+                top: 0,
+                width: 800,
+                height: 600,
+            },
+            attachment_state: WindowAttachmentState::Available,
+            is_foreground: true,
+            is_cloaked: false,
+        }
+    }
+
+    #[test]
+    fn hides_bare_explorer_fallback_rows() {
+        let candidate = raw_candidate("explorer.exe", Some("C:\\Windows\\explorer.exe"));
+        assert!(!should_surface_logical_target(&candidate));
+    }
+
+    #[test]
+    fn keeps_real_file_explorer_windows_targetable() {
+        let candidate = raw_candidate(
+            "Documents - File Explorer",
+            Some("C:\\Windows\\explorer.exe"),
+        );
+        assert!(should_surface_logical_target(&candidate));
+    }
+
+    #[test]
+    fn hides_windows_input_experience_rows() {
+        let candidate = raw_candidate(
+            "Windows Input Experience",
+            Some("C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\TextInputHost.exe"),
+        );
+        assert!(!should_surface_logical_target(&candidate));
+    }
 }
