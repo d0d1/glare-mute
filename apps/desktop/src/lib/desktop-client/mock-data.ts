@@ -83,6 +83,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
   return [
     {
       windowId: "0x00010001",
+      logicalTargetId: "0x00010001",
+      secondaryLabel: null,
       title: "IRPF 2026 - Declaracao de Ajuste Anual",
       executablePath: "C:\\Program Files\\IRPF\\irpf.exe",
       processId: 4720,
@@ -93,6 +95,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010002",
+      logicalTargetId: "0x00010002",
+      secondaryLabel: null,
       title: "IRPF 2026 - Rendimentos Tributaveis Recebidos de Pessoa Juridica",
       executablePath: "C:\\Program Files\\IRPF\\irpf.exe",
       processId: 4720,
@@ -103,6 +107,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010003",
+      logicalTargetId: "0x00010003",
+      secondaryLabel: null,
       title: "Bloco de Notas",
       executablePath: "C:\\Windows\\System32\\notepad.exe",
       processId: 8640,
@@ -113,6 +119,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010004",
+      logicalTargetId: "0x00010004",
+      secondaryLabel: null,
       title: "Explorador de Arquivos - Declaracoes 2026",
       executablePath: "C:\\Windows\\explorer.exe",
       processId: 3216,
@@ -123,6 +131,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010005",
+      logicalTargetId: "0x00010005",
+      secondaryLabel: null,
       title: "Visual Studio Code - glare-mute - App.tsx",
       executablePath: "C:\\Users\\dbhul\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
       processId: 7812,
@@ -133,6 +143,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010006",
+      logicalTargetId: "0x00010006",
+      secondaryLabel: null,
       title: "ReceitaNet BX - Importacao e recibos",
       executablePath: "C:\\Program Files\\Receita Federal\\ReceitaNet BX\\receitanetbx.exe",
       processId: 11028,
@@ -143,6 +155,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010007",
+      logicalTargetId: "0x00010007",
+      secondaryLabel: null,
       title: "Painel de Controle > Sistema e Seguranca > Opcoes de Energia",
       executablePath: "C:\\Windows\\System32\\control.exe",
       processId: 9188,
@@ -153,6 +167,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010008",
+      logicalTargetId: "0x00010008",
+      secondaryLabel: null,
       title: "Mozilla Firefox - Documentacao de acessibilidade e contraste visual",
       executablePath: "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
       processId: 13124,
@@ -163,6 +179,8 @@ export function defaultWindowCandidates(): AppSnapshot["windowCandidates"] {
     },
     {
       windowId: "0x00010009",
+      logicalTargetId: "0x00010009",
+      secondaryLabel: null,
       title: "LibreOffice Calc - Planejamento financeiro 2026.ods",
       executablePath: "C:\\Program Files\\LibreOffice\\program\\scalc.exe",
       processId: 14448,

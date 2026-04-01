@@ -2,7 +2,6 @@ import { StatusChip } from "../../components/StatusChip";
 import type { AppSnapshot, WindowDescriptor } from "../../lib/contracts";
 import type { Messages } from "../../lib/i18n";
 import { windowEffectTone } from "../effects/effect-utils";
-import { executableName } from "./window-utils";
 
 export function WindowRow({
   candidate,
@@ -22,6 +21,7 @@ export function WindowRow({
       <button
         aria-selected={selected}
         className="window-select"
+        data-has-secondary={candidate.secondaryLabel ? "true" : "false"}
         data-selected={selected}
         onClick={onSelect}
         type="button"
@@ -40,7 +40,9 @@ export function WindowRow({
             ) : null}
           </div>
         </div>
-        <p className="window-subtitle">{executableName(messages, candidate.executablePath)}</p>
+        {candidate.secondaryLabel ? (
+          <p className="window-subtitle">{candidate.secondaryLabel}</p>
+        ) : null}
       </button>
     </li>
   );

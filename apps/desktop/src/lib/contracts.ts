@@ -69,6 +69,8 @@ export interface WindowBounds {
 
 export interface WindowDescriptor {
   windowId: string;
+  logicalTargetId: string;
+  secondaryLabel: string | null;
   title: string;
   executablePath: string | null;
   processId: number;

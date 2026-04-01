@@ -46,7 +46,7 @@ export function windowLensStatus(
   candidate: WindowDescriptor,
   coveredWindowIds: Set<string>
 ): AppSnapshot["lens"]["status"] | null {
-  if (!coveredWindowIds.has(candidate.windowId)) {
+  if (!coveredWindowIds.has(candidate.logicalTargetId)) {
     return null;
   }
 

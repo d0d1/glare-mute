@@ -2,7 +2,8 @@ mod effects;
 mod overlay;
 mod windowing;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -19,8 +20,8 @@ use windows::Win32::UI::Magnification::{
 use self::effects::preset_label;
 use self::overlay::OverlaySurface;
 use self::windowing::{
-    describe_window, ensure_bool, enumerate_attachable_windows, parse_window_id,
-    presentation_target, pump_messages, register_host_window_class,
+    RawWindowCandidate, ensure_bool, enumerate_raw_windows, presentation_target, pump_messages,
+    register_host_window_class,
 };
 
 const THREAD_TICK_INTERVAL: Duration = Duration::from_millis(16);
@@ -80,7 +81,10 @@ impl LensControllerImpl {
             bail!("This effect is not implemented in the native Windows path right now.")
         }
 
-        let descriptor = describe_window(parse_window_id(window_id)?)?
+        let descriptor = enumerate_logical_targets()?
+            .into_iter()
+            .map(|candidate| candidate.descriptor)
+            .find(|candidate| candidate.logical_target_id == window_id)
             .ok_or_else(|| anyhow!("The selected window is no longer available."))?;
         let (response_tx, response_rx) = mpsc::channel();
 
@@ -111,7 +115,10 @@ impl LensControllerImpl {
     }
 
     pub(super) fn list_windows(&self) -> Result<Vec<WindowDescriptor>> {
-        enumerate_attachable_windows()
+        Ok(enumerate_logical_targets()?
+            .into_iter()
+            .map(|candidate| candidate.descriptor)
+            .collect())
     }
 
     pub(super) fn set_apply_to_related_windows(&self, enabled: bool) -> Result<LensSnapshot> {
@@ -182,9 +189,16 @@ enum ControllerCommand {
     Shutdown,
 }
 
+#[derive(Clone)]
+struct LogicalWindowCandidate {
+    descriptor: WindowDescriptor,
+    raw_targets: Vec<RawWindowCandidate>,
+    related_group_key: String,
+    allows_related_window_expansion: bool,
+}
+
 struct AttachmentSession {
-    active_window_id: String,
-    process_id: u32,
+    active_logical_target_id: String,
     preset: VisualPreset,
 }
 
@@ -282,14 +296,8 @@ impl WorkerState {
     }
 
     fn attach(&mut self, descriptor: WindowDescriptor, preset: VisualPreset) -> Result<()> {
-        let target_hwnd = parse_window_id(&descriptor.window_id)?;
-        if unsafe {
-            !windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(target_hwnd)).as_bool()
-        } {
-            bail!("The selected window is no longer valid.");
-        }
-
         tracing::info!(
+            logical_target_id = %descriptor.logical_target_id,
             window_id = %descriptor.window_id,
             title = %descriptor.title,
             preset = ?preset,
@@ -299,8 +307,7 @@ impl WorkerState {
         );
 
         self.session = Some(AttachmentSession {
-            active_window_id: descriptor.window_id.clone(),
-            process_id: descriptor.process_id,
+            active_logical_target_id: descriptor.logical_target_id.clone(),
             preset,
         });
         self.last_target_scan = Instant::now() - TARGET_SCAN_INTERVAL;
@@ -393,51 +400,54 @@ impl WorkerState {
             return Ok(());
         };
 
-        let active_window_id = session.active_window_id.clone();
-        let process_id = session.process_id;
         let preset = session.preset;
-        let mut covered_targets = enumerate_attachable_windows()?
-            .into_iter()
-            .filter(|candidate| {
-                if self.apply_to_related_windows {
-                    candidate.process_id == process_id
-                } else {
-                    candidate.window_id == active_window_id
-                }
+        let logical_targets = enumerate_logical_targets()?;
+        let Some(active_target) = logical_targets
+            .iter()
+            .find(|candidate| {
+                candidate.descriptor.logical_target_id == session.active_logical_target_id
             })
-            .collect::<Vec<_>>();
-
-        if covered_targets.is_empty() {
+            .cloned()
+        else {
             tracing::info!(
-                process_id,
-                "no covered windows remain for the current session"
+                logical_target_id = %session.active_logical_target_id,
+                "no logical targets remain for the current session"
             );
             self.clear_session()?;
             self.update_shared_snapshot();
             return Ok(());
-        }
+        };
 
-        if !covered_targets
-            .iter()
-            .any(|candidate| candidate.window_id == active_window_id)
+        let covered_targets = if self.apply_to_related_windows && active_target.allows_related_window_expansion
         {
-            if let Some(session) = self.session.as_mut() {
-                session.active_window_id = covered_targets[0].window_id.clone();
-            }
-        }
+            logical_targets
+                .into_iter()
+                .filter(|candidate| candidate.related_group_key == active_target.related_group_key)
+                .collect::<Vec<_>>()
+        } else {
+            vec![active_target.clone()]
+        };
 
-        self.covered_targets.clear();
-        self.covered_targets.append(&mut covered_targets);
-        self.reconcile_surfaces(preset)?;
+        self.covered_targets = covered_targets
+            .iter()
+            .map(|candidate| candidate.descriptor.clone())
+            .collect();
+        self.reconcile_surfaces(&covered_targets, preset)?;
         self.update_shared_snapshot();
         Ok(())
     }
 
-    fn reconcile_surfaces(&mut self, preset: VisualPreset) -> Result<()> {
-        let desired_targets = self
-            .covered_targets
+    fn reconcile_surfaces(
+        &mut self,
+        covered_targets: &[LogicalWindowCandidate],
+        preset: VisualPreset,
+    ) -> Result<()> {
+        let desired_targets = covered_targets
             .iter()
-            .filter(|candidate| candidate.attachment_state == WindowAttachmentState::Available)
+            .flat_map(|candidate| candidate.raw_targets.iter())
+            .filter(|candidate| {
+                candidate.attachment_state == WindowAttachmentState::Available && !candidate.is_cloaked
+            })
             .cloned()
             .collect::<Vec<_>>();
 
@@ -470,7 +480,7 @@ impl WorkerState {
             }
 
             self.surfaces
-                .push(OverlaySurface::create(&descriptor, preset)?);
+                .push(OverlaySurface::create(&descriptor.window_id, preset)?);
         }
 
         self.refresh_filter_lists()?;
@@ -526,7 +536,7 @@ impl WorkerState {
         let session = self.session.as_ref()?;
         self.covered_targets
             .iter()
-            .find(|candidate| candidate.window_id == session.active_window_id)
+            .find(|candidate| candidate.logical_target_id == session.active_logical_target_id)
             .cloned()
             .or_else(|| self.covered_targets.first().cloned())
     }
@@ -633,4 +643,178 @@ impl WorkerState {
         snapshot.summary = summary;
         snapshot.backend_label = "Windows Magnification backend".to_string();
     }
+}
+
+fn enumerate_logical_targets() -> Result<Vec<LogicalWindowCandidate>> {
+    let raw_targets = enumerate_raw_windows()?;
+    let mut grouped_targets = HashMap::<String, Vec<RawWindowCandidate>>::new();
+
+    for candidate in raw_targets {
+        grouped_targets
+            .entry(logical_target_id_for(&candidate))
+            .or_default()
+            .push(candidate);
+    }
+
+    let mut logical_targets = grouped_targets
+        .into_iter()
+        .filter_map(|(logical_target_id, raw_targets)| {
+            build_logical_target(logical_target_id, raw_targets)
+        })
+        .collect::<Vec<_>>();
+
+    apply_secondary_labels(&mut logical_targets);
+    logical_targets.sort_by(|left, right| {
+        logical_window_sort_key(&left.descriptor)
+            .cmp(&logical_window_sort_key(&right.descriptor))
+            .then_with(|| left.descriptor.logical_target_id.cmp(&right.descriptor.logical_target_id))
+    });
+
+    Ok(logical_targets)
+}
+
+fn build_logical_target(
+    logical_target_id: String,
+    mut raw_targets: Vec<RawWindowCandidate>,
+) -> Option<LogicalWindowCandidate> {
+    raw_targets.sort_by(|left, right| {
+        canonical_target_sort_key(right).cmp(&canonical_target_sort_key(left))
+    });
+    let canonical_target = raw_targets.first()?.clone();
+    let allows_related_window_expansion = !raw_targets.iter().any(is_ambiguous_host_candidate);
+    let related_group_key = if allows_related_window_expansion {
+        format!("process:{}", canonical_target.process_id)
+    } else {
+        format!("logical:{}", logical_target_id)
+    };
+
+    Some(LogicalWindowCandidate {
+        descriptor: WindowDescriptor {
+            window_id: canonical_target.window_id.clone(),
+            logical_target_id: logical_target_id.clone(),
+            secondary_label: None,
+            title: canonical_target.title.clone(),
+            executable_path: canonical_target.executable_path.clone(),
+            process_id: canonical_target.process_id,
+            window_class: canonical_target.window_class.clone(),
+            bounds: canonical_target.bounds.clone(),
+            attachment_state: canonical_target.attachment_state,
+            is_foreground: canonical_target.is_foreground,
+        },
+        raw_targets,
+        related_group_key,
+        allows_related_window_expansion,
+    })
+}
+
+fn apply_secondary_labels(candidates: &mut [LogicalWindowCandidate]) {
+    let mut title_groups = HashMap::<String, Vec<usize>>::new();
+    for (index, candidate) in candidates.iter().enumerate() {
+        title_groups
+            .entry(candidate.descriptor.title.to_lowercase())
+            .or_default()
+            .push(index);
+    }
+
+    for indices in title_groups.values() {
+        if indices.len() <= 1 {
+            if let Some(index) = indices.first() {
+                candidates[*index].descriptor.secondary_label = None;
+            }
+            continue;
+        }
+
+        let executable_labels = indices
+            .iter()
+            .filter_map(|index| {
+                executable_basename(candidates[*index].descriptor.executable_path.as_deref())
+                    .filter(|name| !is_host_process_name(name))
+            })
+            .collect::<HashSet<_>>();
+        let use_executable_labels = executable_labels.len() == indices.len();
+
+        for index in indices {
+            candidates[*index].descriptor.secondary_label =
+                disambiguation_label(&candidates[*index], use_executable_labels);
+        }
+    }
+}
+
+fn disambiguation_label(
+    candidate: &LogicalWindowCandidate,
+    use_executable_label: bool,
+) -> Option<String> {
+    if use_executable_label {
+        return executable_basename(candidate.descriptor.executable_path.as_deref())
+            .filter(|name| !is_host_process_name(name));
+    }
+
+    Some(format!("PID {}", candidate.descriptor.process_id))
+}
+
+fn logical_target_id_for(candidate: &RawWindowCandidate) -> String {
+    if is_ambiguous_host_candidate(candidate) {
+        let normalized_title = normalize_title(&candidate.title);
+        if !normalized_title.is_empty() {
+            return format!("logical:hosted:{normalized_title}");
+        }
+    }
+
+    format!("logical:window:{}", candidate.window_id)
+}
+
+fn normalize_title(title: &str) -> String {
+    title.trim().to_lowercase()
+}
+
+fn executable_basename(path: Option<&str>) -> Option<String> {
+    path.and_then(|value| Path::new(value).file_name())
+        .map(|name| name.to_string_lossy().to_string())
+}
+
+fn is_host_process_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "applicationframehost.exe" | "systemsettings.exe"
+    )
+}
+
+fn is_ambiguous_host_candidate(candidate: &RawWindowCandidate) -> bool {
+    candidate.is_cloaked
+        || candidate
+            .window_class
+            .as_deref()
+            .map(|class_name| class_name.to_ascii_lowercase().contains("applicationframe"))
+            .unwrap_or(false)
+        || executable_basename(candidate.executable_path.as_deref())
+            .map(|name| is_host_process_name(&name))
+            .unwrap_or(false)
+}
+
+fn canonical_target_sort_key(candidate: &RawWindowCandidate) -> (u8, u8, u8, u8, i32, i32) {
+    let attachment_rank = match candidate.attachment_state {
+        WindowAttachmentState::Available => 2,
+        WindowAttachmentState::Minimized => 1,
+    };
+
+    (
+        u8::from(!candidate.is_cloaked),
+        attachment_rank,
+        u8::from(!is_ambiguous_host_candidate(candidate)),
+        u8::from(candidate.is_foreground),
+        candidate.bounds.width,
+        candidate.bounds.height,
+    )
+}
+
+fn logical_window_sort_key(descriptor: &WindowDescriptor) -> (String, String, String) {
+    (
+        descriptor.title.to_lowercase(),
+        descriptor
+            .secondary_label
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase(),
+        descriptor.logical_target_id.to_lowercase(),
+    )
 }

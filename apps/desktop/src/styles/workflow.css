@@ -42,6 +42,10 @@
   text-align: left;
 }
 
+.window-select[data-has-secondary="false"] {
+  gap: 6px;
+}
+
 .window-select[data-selected="true"] {
   background: var(--row-background-selected);
 }

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use glare_mute_core::{VisualPreset, WindowDescriptor};
+use glare_mute_core::VisualPreset;
 use windows::Win32::Foundation::COLORREF;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Magnification::{
@@ -25,7 +25,7 @@ pub(super) struct OverlaySurface {
 }
 
 impl OverlaySurface {
-    pub(super) fn create(target: &WindowDescriptor, preset: VisualPreset) -> Result<Self> {
+    pub(super) fn create(target_window_id: &str, preset: VisualPreset) -> Result<Self> {
         let instance = unsafe {
             GetModuleHandleW(None).context("failed to resolve module handle for host window")?
         };
@@ -86,8 +86,8 @@ impl OverlaySurface {
         }
 
         let mut surface = Self {
-            target_window_id: target.window_id.clone(),
-            target_hwnd: parse_window_id(&target.window_id)?,
+            target_window_id: target_window_id.to_string(),
+            target_hwnd: parse_window_id(target_window_id)?,
             host_hwnd,
             magnifier_hwnd,
         };

@@ -18,7 +18,7 @@ export function WindowPane({
   coveredWindowIds: Set<string>;
   filteredWindowCandidates: AppSnapshot["windowCandidates"];
   messages: Messages;
-  onSelectWindow: (windowId: string) => void;
+  onSelectWindow: (logicalTargetId: string) => void;
   selectedWindowId: string | null;
   windowQuery: string;
   onWindowQueryChange: (value: string) => void;
@@ -44,11 +44,11 @@ export function WindowPane({
           {filteredWindowCandidates.map((candidate) => (
             <WindowRow
               candidate={candidate}
-              key={candidate.windowId}
+              key={candidate.logicalTargetId}
               lensStatus={windowLensStatus(candidate, coveredWindowIds)}
               messages={messages}
-              onSelect={() => onSelectWindow(candidate.windowId)}
-              selected={selectedWindowId === candidate.windowId}
+              onSelect={() => onSelectWindow(candidate.logicalTargetId)}
+              selected={selectedWindowId === candidate.logicalTargetId}
             />
           ))}
         </ul>

@@ -126,20 +126,8 @@ function App() {
 
     setSelectedWindowId((current) => {
       const currentWindow =
-        nextCandidates.find((candidate) => candidate.windowId === current) ?? null;
-      if (currentWindow) {
-        return currentWindow.windowId;
-      }
-
-      const activeWindowId = snapshot.lens.activeTarget?.windowId;
-      if (
-        activeWindowId &&
-        nextCandidates.some((candidate) => candidate.windowId === activeWindowId)
-      ) {
-        return activeWindowId;
-      }
-
-      return null;
+        nextCandidates.find((candidate) => candidate.logicalTargetId === current) ?? null;
+      return currentWindow?.logicalTargetId ?? null;
     });
   }, [snapshot, windowQuery]);
 
@@ -165,9 +153,9 @@ function App() {
   }, [snapshot, messages.refreshWindowListFailure]);
 
   const selectedWindow =
-    allWindowCandidates.find((candidate) => candidate.windowId === selectedWindowId) ?? null;
+    allWindowCandidates.find((candidate) => candidate.logicalTargetId === selectedWindowId) ?? null;
   const coveredWindowIds = new Set(
-    snapshot?.lens.coveredTargets.map((target) => target.windowId) ?? []
+    snapshot?.lens.coveredTargets.map((target) => target.logicalTargetId) ?? []
   );
   const selectedPresetDefinition =
     localizedEffectChoices.find((preset) => preset.id === selectedPreset) ?? null;
@@ -219,7 +207,7 @@ function App() {
     }
 
     await updateSnapshot(
-      () => desktopClient.attachWindow(selectedWindow.windowId, selectedPreset),
+      () => desktopClient.attachWindow(selectedWindow.logicalTargetId, selectedPreset),
       "apply"
     );
   }

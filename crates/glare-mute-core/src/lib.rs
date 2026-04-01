@@ -152,6 +152,10 @@ pub enum WindowAttachmentState {
 #[serde(rename_all = "camelCase")]
 pub struct WindowDescriptor {
     pub window_id: String,
+    #[serde(default)]
+    pub logical_target_id: String,
+    #[serde(default)]
+    pub secondary_label: Option<String>,
     pub title: String,
     pub executable_path: Option<String>,
     pub process_id: u32,

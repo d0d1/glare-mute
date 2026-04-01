@@ -1,6 +1,16 @@
 import type { AppLanguage, AppSnapshot, VisualPreset, WindowDescriptor } from "../contracts";
 import { defaultSnapshot } from "./mock-data";
 
+function normalizeWindowDescriptor(
+  descriptor: WindowDescriptor & { logicalTargetId?: string; secondaryLabel?: string | null }
+): WindowDescriptor {
+  return {
+    ...descriptor,
+    logicalTargetId: descriptor.logicalTargetId ?? descriptor.windowId,
+    secondaryLabel: descriptor.secondaryLabel ?? null,
+  };
+}
+
 const STORAGE_KEY = "glaremute:preview-snapshot";
 type LegacyVisualPreset = VisualPreset | "dark" | "darken";
 
@@ -49,10 +59,17 @@ export function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
     lens: {
       ...snapshot.lens,
       activePreset: normalizeOptionalPresetId(snapshot.lens.activePreset),
-      coveredTargets:
+      activeTarget: snapshot.lens.activeTarget
+        ? normalizeWindowDescriptor(snapshot.lens.activeTarget as WindowDescriptor)
+        : null,
+      coveredTargets: (
         (snapshot.lens as AppSnapshot["lens"] & { coveredTargets?: WindowDescriptor[] })
-          .coveredTargets ?? (snapshot.lens.activeTarget ? [snapshot.lens.activeTarget] : []),
+          .coveredTargets ?? (snapshot.lens.activeTarget ? [snapshot.lens.activeTarget] : [])
+      ).map((descriptor) => normalizeWindowDescriptor(descriptor)),
     },
+    windowCandidates: snapshot.windowCandidates.map((descriptor) =>
+      normalizeWindowDescriptor(descriptor)
+    ),
   };
 }
 

@@ -2,7 +2,7 @@ use std::ffi::c_void;
 use std::mem::size_of;
 
 use anyhow::{Context, Result, anyhow};
-use glare_mute_core::{WindowAttachmentState, WindowBounds, WindowDescriptor};
+use glare_mute_core::{WindowAttachmentState, WindowBounds};
 use windows::Win32::Foundation::{CloseHandle, GetLastError, HWND, LPARAM, LRESULT, RECT};
 use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -21,23 +21,36 @@ use windows::core::{BOOL, Error as WindowsError, PCWSTR, PWSTR, w};
 
 pub(super) const HOST_CLASS_NAME: PCWSTR = w!("GlareMuteMagnifierHost");
 
+#[derive(Clone, Debug)]
+pub(super) struct RawWindowCandidate {
+    pub window_id: String,
+    pub title: String,
+    pub executable_path: Option<String>,
+    pub process_id: u32,
+    pub window_class: Option<String>,
+    pub bounds: WindowBounds,
+    pub attachment_state: WindowAttachmentState,
+    pub is_foreground: bool,
+    pub is_cloaked: bool,
+}
+
 pub(super) struct PresentationTarget {
     pub rect: RECT,
     pub insert_after: HWND,
 }
 
-pub(super) fn enumerate_attachable_windows() -> Result<Vec<WindowDescriptor>> {
+pub(super) fn enumerate_raw_windows() -> Result<Vec<RawWindowCandidate>> {
     let mut windows = Vec::new();
-    let windows_ptr = &mut windows as *mut Vec<WindowDescriptor>;
+    let windows_ptr = &mut windows as *mut Vec<RawWindowCandidate>;
 
     unsafe {
         EnumWindows(Some(enum_windows_callback), LPARAM(windows_ptr as isize))
             .context("failed to enumerate top-level windows")?;
     }
 
-    windows.sort_by(|left: &WindowDescriptor, right: &WindowDescriptor| {
-        window_sort_key(left)
-            .cmp(&window_sort_key(right))
+    windows.sort_by(|left: &RawWindowCandidate, right: &RawWindowCandidate| {
+        raw_window_sort_key(left)
+            .cmp(&raw_window_sort_key(right))
             .then_with(|| left.window_id.cmp(&right.window_id))
     });
     let available_count = windows
@@ -49,12 +62,12 @@ pub(super) fn enumerate_attachable_windows() -> Result<Vec<WindowDescriptor>> {
         candidate_count = windows.len(),
         available_count,
         minimized_count,
-        "enumerated window candidates"
+        "enumerated raw window candidates"
     );
     Ok(windows)
 }
 
-pub(super) fn describe_window(hwnd: HWND) -> Result<Option<WindowDescriptor>> {
+pub(super) fn describe_raw_window(hwnd: HWND) -> Result<Option<RawWindowCandidate>> {
     if hwnd.0.is_null() {
         return Ok(None);
     }
@@ -87,7 +100,7 @@ pub(super) fn describe_window(hwnd: HWND) -> Result<Option<WindowDescriptor>> {
         return Ok(None);
     }
 
-    Ok(Some(WindowDescriptor {
+    Ok(Some(RawWindowCandidate {
         window_id: format_window_id(hwnd),
         title: if title.trim().is_empty() {
             executable_path
@@ -108,6 +121,7 @@ pub(super) fn describe_window(hwnd: HWND) -> Result<Option<WindowDescriptor>> {
             WindowAttachmentState::Available
         },
         is_foreground: hwnd == unsafe { GetForegroundWindow() },
+        is_cloaked: is_window_cloaked(hwnd),
     }))
 }
 
@@ -200,9 +214,9 @@ pub(super) fn pump_messages() -> Result<bool> {
 }
 
 unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    let windows = unsafe { &mut *(lparam.0 as *mut Vec<WindowDescriptor>) };
+    let windows = unsafe { &mut *(lparam.0 as *mut Vec<RawWindowCandidate>) };
 
-    if let Ok(Some(descriptor)) = describe_window(hwnd) {
+    if let Ok(Some(descriptor)) = describe_raw_window(hwnd) {
         windows.push(descriptor);
     }
 
@@ -323,7 +337,7 @@ fn format_window_id(hwnd: HWND) -> String {
     format!("0x{:X}", hwnd.0 as usize)
 }
 
-fn window_sort_key(descriptor: &WindowDescriptor) -> (String, String, String) {
+fn raw_window_sort_key(descriptor: &RawWindowCandidate) -> (String, String, String) {
     (
         descriptor.title.to_lowercase(),
         descriptor
