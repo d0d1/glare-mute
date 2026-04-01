@@ -19,3 +19,5 @@ apps/desktop/src-tauri/target/
 *.swp
 *.swo
 .DS_Store
+
+.agent_communication/
