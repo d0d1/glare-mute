@@ -36,10 +36,11 @@ pub enum EffectFamily {
     Transform,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VisualPreset {
     WarmDim,
+    #[default]
     Invert,
     GreyscaleInvert,
 }
@@ -197,12 +198,6 @@ pub struct AppSnapshot {
     pub platform: PlatformSummary,
     pub lens: LensSnapshot,
     pub window_candidates: Vec<WindowDescriptor>,
-}
-
-impl Default for VisualPreset {
-    fn default() -> Self {
-        Self::Invert
-    }
 }
 
 impl Default for AppSettings {
