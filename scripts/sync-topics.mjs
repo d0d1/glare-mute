@@ -5,12 +5,7 @@ const topics = [
   "windows",
   "tauri",
   "rust",
-  "react",
-  "photophobia",
   "desktop-app",
-  "assistive-technology",
-  "open-source",
-  "dark-mode",
 ];
 
 const args = [
