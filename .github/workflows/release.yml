@@ -15,14 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22.21.1
           cache: pnpm
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -39,6 +39,7 @@ jobs:
         with:
           name: glare-mute-windows-bundle-${{ github.sha }}
           path: |
+            target/release/glare-mute-desktop.exe
             target/release/bundle/msi/*.msi
             target/release/bundle/nsis/*.exe
 
@@ -48,5 +49,6 @@ jobs:
         with:
           draft: true
           files: |
+            target/release/glare-mute-desktop.exe
             target/release/bundle/msi/*.msi
             target/release/bundle/nsis/*.exe

@@ -418,7 +418,8 @@ impl WorkerState {
             return Ok(());
         };
 
-        let covered_targets = if self.apply_to_related_windows && active_target.allows_related_window_expansion
+        let covered_targets = if self.apply_to_related_windows
+            && active_target.allows_related_window_expansion
         {
             logical_targets
                 .into_iter()
@@ -446,7 +447,8 @@ impl WorkerState {
             .iter()
             .flat_map(|candidate| candidate.raw_targets.iter())
             .filter(|candidate| {
-                candidate.attachment_state == WindowAttachmentState::Available && !candidate.is_cloaked
+                candidate.attachment_state == WindowAttachmentState::Available
+                    && !candidate.is_cloaked
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -667,7 +669,11 @@ fn enumerate_logical_targets() -> Result<Vec<LogicalWindowCandidate>> {
     logical_targets.sort_by(|left, right| {
         logical_window_sort_key(&left.descriptor)
             .cmp(&logical_window_sort_key(&right.descriptor))
-            .then_with(|| left.descriptor.logical_target_id.cmp(&right.descriptor.logical_target_id))
+            .then_with(|| {
+                left.descriptor
+                    .logical_target_id
+                    .cmp(&right.descriptor.logical_target_id)
+            })
     });
 
     Ok(logical_targets)
@@ -882,7 +888,9 @@ mod tests {
     fn hides_windows_input_experience_rows() {
         let candidate = raw_candidate(
             "Windows Input Experience",
-            Some("C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\TextInputHost.exe"),
+            Some(
+                "C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\TextInputHost.exe",
+            ),
         );
         assert!(!should_surface_logical_target(&candidate));
     }

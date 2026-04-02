@@ -53,9 +53,20 @@ Glare mute is local software.
 - **Windows:** supported target platform for the current app
 - **Other platforms:** not supported in the current release scope
 
-## Install / release status
+## Install
 
-Glare mute is still in an early Windows-first release stage. The repository can build a production desktop executable, but the project is still being tightened before a broader end-user release.
+Download the latest release from GitHub Releases.
+
+- **Recommended:** use the Windows setup installer
+- **Portable:** use the standalone `.exe`
+- **Advanced/manual deployment:** use the `.msi`
+
+**Windows security warning**  
+Glare mute is currently **unsigned**. The app is **free and open source**, but avoiding the **“Windows protected your PC” / “Unknown publisher”** warning for Windows releases still requires **paid code signing**. Because of that, Windows Defender SmartScreen may warn before launch even when you downloaded the app from the official GitHub Releases page. If you trust the release, use **More info → Run anyway**.
+
+## Release status
+
+Glare mute is an early Windows-first release focused on a narrow v1 scope.
 
 ## License
 
