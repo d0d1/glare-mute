@@ -14,7 +14,7 @@ Currently available in English, Portuguese (Brazil), and Spanish.
 
 ## Preview
 
-A typical use case is a bright legacy tax app that stays white even when the rest of Windows is dark.
+A typical use case is a bright legacy Windows app that stays white even when the rest of the system is dark.
 
 ### Original
 
