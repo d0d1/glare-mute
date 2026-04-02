@@ -1,12 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-const topics = [
-  "accessibility",
-  "windows",
-  "tauri",
-  "rust",
-  "desktop-app",
-];
+const topics = ["accessibility", "windows", "tauri", "rust", "desktop-app"];
 
 const args = [
   "api",
