@@ -2,12 +2,7 @@
 
 Glare mute is a Windows accessibility app for people who need bright apps toned down without changing the rest of the desktop.
 
-## What it does
-
-- shows a live list of windows you can target
-- applies **Invert** or **Greyscale Invert** to the selected window
-- can keep the effect on related windows from the same app when that is reliable
-- lets you turn the effect off quickly from the app or tray
+Currently available in English, Portuguese (Brazil), and Spanish.
 
 ## How to use
 
