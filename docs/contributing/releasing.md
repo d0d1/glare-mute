@@ -10,7 +10,8 @@ That keeps the release path low-overhead while Glare mute is still changing quic
 
 - `.github/workflows/release.yml` can build the Windows bundle on demand
 - any `v*` tag triggers the same build and opens a draft GitHub Release
-- the workflow uploads both Windows installer outputs:
+- the workflow uploads the portable Windows build and both installer outputs:
+  - `target/release/glare-mute-portable.exe`
   - `target/release/bundle/msi/*.msi`
   - `target/release/bundle/nsis/*.exe`
 
@@ -31,9 +32,9 @@ git push origin v0.1.0-beta.1
 
 That will:
 
-- build the Windows installers on GitHub Actions
+- build the portable Windows executable and installers on GitHub Actions
 - upload them as workflow artifacts
-- create a draft GitHub Release with the same installers attached
+- create a draft GitHub Release with the same assets attached
 
 ## Local verification before tagging
 
@@ -47,5 +48,8 @@ corepack pnpm --filter @glaremute/desktop tauri:build
 
 The built outputs should appear under:
 
+- `target\release\glare-mute-desktop.exe`
 - `target\release\bundle\msi`
 - `target\release\bundle\nsis`
+
+For release distribution, publish the direct executable as `glare-mute-portable.exe` so it is clearly distinguished from the installer builds.
