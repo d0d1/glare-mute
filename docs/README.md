@@ -8,6 +8,7 @@
 - [Release workflow](./contributing/releasing.md)
 - [Testing workflow](./contributing/testing.md)
 - [Debugging workflow](./operations/debugging.md)
+- [Windows focus flicker note](./operations/windows-focus-flicker.md)
 - [Windows IRPF test flow](./operations/windows-irpf-test.md)
 
 ## Architecture
@@ -32,4 +33,5 @@
 ## Operations
 
 - [Debugging](./operations/debugging.md)
+- [Windows focus flicker note](./operations/windows-focus-flicker.md)
 - [Windows IRPF test flow](./operations/windows-irpf-test.md)
