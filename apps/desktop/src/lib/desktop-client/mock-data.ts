@@ -3,7 +3,7 @@ import type { AppSnapshot, VisualPreset } from "../contracts";
 export function defaultSnapshot(): AppSnapshot {
   return {
     appName: "Glare mute",
-    appVersion: "0.1.0-preview",
+    appVersion: "0.1.1-preview",
     devMode: import.meta.env.DEV,
     settings: {
       language: "system",

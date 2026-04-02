@@ -1319,7 +1319,7 @@ dependencies = [
 
 [[package]]
 name = "glare-mute-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1327,7 +1327,7 @@ dependencies = [
 
 [[package]]
 name = "glare-mute-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "glare-mute-core",
@@ -1347,7 +1347,7 @@ dependencies = [
 
 [[package]]
 name = "glare-mute-platform"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "glare-mute-core",
 ]
