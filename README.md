@@ -38,7 +38,7 @@ Download the latest release from GitHub Releases.
 - **Advanced/manual deployment:** use the `.msi`
 
 **Windows security warning**  
-Glare mute is currently **unsigned**. The app is **free and open source**, but avoiding the **“Windows protected your PC” / “Unknown publisher”** warning for Windows releases still requires **paid code signing**. Because of that, Windows Defender SmartScreen may warn before launch even when you downloaded the app from the official GitHub Releases page. If you trust the release, use **More info → Run anyway**.
+Glare mute is currently unsigned, so Windows may show a SmartScreen warning before launch, even when downloaded from the official GitHub Releases page. The app is free and open source, but code signing for Windows releases is a paid requirement. If you trust the release, use **More info** -> **Run anyway**.
 
 ## Privacy and local processing
 
