@@ -8,33 +8,54 @@ That keeps the release path low-overhead while Glare mute is still changing quic
 
 ## What is already prepared
 
-- `.github/workflows/release.yml` can build the Windows bundle on demand
-- any `v*` tag triggers the same build and opens a draft GitHub Release
-- the workflow uploads the portable Windows build and both installer outputs:
-  - `target/release/glare-mute-portable.exe`
-  - `target/release/bundle/msi/*.msi`
-  - `target/release/bundle/nsis/*.exe`
+- `.github/workflows/release.yml` builds the Windows bundle on GitHub-hosted runners and submits the release artifacts to SignPath for signing.
+- any `v*` tag triggers the same build and opens a draft GitHub Release.
+- the workflow publishes only signed assets:
+  - `glare-mute-portable.exe`
+  - `Glare.mute_<version>_x64-setup.exe`
+  - `Glare.mute_<version>_x64_en-US.msi`
+
+## Manual setup still required
+
+Before the workflow can sign anything, complete the SignPath Foundation and GitHub setup manually:
+
+- apply for the project with SignPath Foundation
+- create the SignPath organization/project/signing policy/artifact configurations
+- install the SignPath GitHub App if SignPath requires repository policy verification
+- create the repository secret:
+  - `SIGNPATH_API_TOKEN`
+- create the repository variables:
+  - `SIGNPATH_ORGANIZATION_ID`
+  - `SIGNPATH_PROJECT_SLUG`
+  - `SIGNPATH_SIGNING_POLICY_SLUG`
+  - `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_PORTABLE`
+  - `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_SETUP`
+  - `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_MSI`
+
+The workflow now fails fast with a clear error if any of those values are missing.
 
 ## Manual artifact run
 
-Use the `Release` workflow through `workflow_dispatch` when you want CI-built installers without publishing anything yet.
+Use the `Release` workflow through `workflow_dispatch` when you want GitHub-built signed artifacts without publishing a tag yet.
 
-That gives you downloadable bundle artifacts from Actions while keeping GitHub Releases untouched.
+That gives you downloadable signed artifacts from Actions while keeping GitHub Releases untouched.
 
 ## Draft beta release
 
 When the repo is ready for a draft beta, push a version tag that starts with `v`, for example:
 
 ```bash
-git tag v0.1.0-beta.1
-git push origin v0.1.0-beta.1
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 That will:
 
 - build the portable Windows executable and installers on GitHub Actions
-- upload them as workflow artifacts
-- create a draft GitHub Release with the same assets attached
+- upload the unsigned workflow artifacts required by SignPath
+- submit signing requests for the portable EXE, NSIS installer, and MSI
+- wait for signed outputs to complete
+- create a draft GitHub Release with the signed assets attached
 
 ## Local verification before tagging
 

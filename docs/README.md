@@ -8,6 +8,7 @@
 - [Release workflow](./contributing/releasing.md)
 - [Testing workflow](./contributing/testing.md)
 - [Debugging workflow](./operations/debugging.md)
+- [Code signing policy](./code-signing-policy.md)
 - [Windows focus flicker note](./operations/windows-focus-flicker.md)
 - [Windows IRPF test flow](./operations/windows-irpf-test.md)
 
@@ -16,6 +17,10 @@
 - [Overview](./architecture/overview.md)
 - [Backend strategy](./architecture/backend-strategy.md)
 - [Desktop shell and theme system](./architecture/shell-and-theme.md)
+
+## Project policy
+
+- [Code signing policy](./code-signing-policy.md)
 
 ## Decisions
 
