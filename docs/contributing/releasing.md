@@ -64,7 +64,7 @@ From Windows:
 ```powershell
 cd C:\Users\dbhul\code\glare-mute
 corepack pnpm install
-corepack pnpm --filter @glaremute/desktop tauri:build
+corepack pnpm build:windows
 ```
 
 The built outputs should appear under:
@@ -74,3 +74,13 @@ The built outputs should appear under:
 - `target\release\bundle\nsis`
 
 For release distribution, publish the direct executable as `glare-mute-portable.exe` so it is clearly distinguished from the installer builds.
+
+## Windows prerequisites
+
+The canonical local Windows release path depends on the Microsoft C++ toolchain.
+
+- install Visual Studio Build Tools 2022
+- include the `Desktop development with C++` workload
+- run `corepack pnpm build:windows`
+
+`build:windows` uses `vswhere.exe` to discover the installed toolchain, loads `vcvars64.bat`, and then runs the Tauri production build. The repo does not rely on ad hoc temp wrappers or a manually opened Visual Studio developer shell.

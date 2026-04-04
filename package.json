@@ -13,6 +13,7 @@
     "dev": "pnpm --filter @glaremute/desktop tauri:dev",
     "dev:web": "pnpm --filter @glaremute/desktop dev:web",
     "build": "pnpm lint && pnpm test && pnpm --filter @glaremute/desktop tauri:build",
+    "build:windows": "powershell -ExecutionPolicy Bypass -File ./scripts/build-windows-release.ps1",
     "build:web": "pnpm --filter @glaremute/desktop build:web",
     "lint": "pnpm lint:js && pnpm lint:rust",
     "lint:js": "pnpm exec biome check .",
