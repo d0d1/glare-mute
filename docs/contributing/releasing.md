@@ -8,9 +8,11 @@ That keeps the release path low-overhead while Glare mute is still changing quic
 
 ## What is already prepared
 
-- `.github/workflows/release.yml` builds the Windows bundle on GitHub-hosted runners and submits the release artifacts to SignPath for signing.
+- `.github/workflows/release.yml` builds the Windows bundle on GitHub-hosted runners and can publish either:
+  - unsigned release assets when SignPath is not configured yet
+  - signed release assets when the SignPath configuration is present
 - any `v*` tag triggers the same build and opens a draft GitHub Release.
-- the workflow publishes only signed assets:
+- the workflow publishes these Windows assets:
   - `glare-mute-portable.exe`
   - `Glare.mute_<version>_x64-setup.exe`
   - `Glare.mute_<version>_x64_en-US.msi`
@@ -32,7 +34,7 @@ Before the workflow can sign anything, complete the SignPath Foundation and GitH
   - `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_SETUP`
   - `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_MSI`
 
-The workflow now fails fast with a clear error if any of those values are missing.
+If those values are missing, the workflow now skips the SignPath branch and publishes an unsigned draft release instead of failing.
 
 ## Manual artifact run
 
@@ -43,6 +45,7 @@ That gives you downloadable signed artifacts from Actions while keeping GitHub R
 ## Draft beta release
 
 Do not create or publish a release tag until the `main` branch CI is green for the exact commit you intend to release.
+Treat release-workflow changes as production code: validate everything locally that can be validated before push, then confirm the real GitHub run before trusting the release path.
 
 When the repo is ready for a draft beta, push a version tag that starts with `v`, for example:
 
@@ -54,14 +57,18 @@ git push origin v0.1.2
 That will:
 
 - build the portable Windows executable and installers on GitHub Actions
-- upload the unsigned workflow artifacts required by SignPath
-- submit signing requests for the portable EXE, NSIS installer, and MSI
-- wait for signed outputs to complete
-- create a draft GitHub Release with the signed assets attached
+- upload the unsigned workflow artifacts
+- if SignPath is configured:
+  - submit signing requests for the portable EXE, NSIS installer, and MSI
+  - wait for signed outputs to complete
+  - create a draft GitHub Release with the signed assets attached
+- if SignPath is not configured:
+  - create a draft GitHub Release with the unsigned assets attached
 
 ## Local verification before tagging
 
 Local verification is not a substitute for green GitHub CI. Treat local checks as a preflight, then confirm the matching `main` CI run is green before tagging.
+For workflow changes, this means validating both the repo checks and the workflow logic branch you expect to take, then verifying the matching GitHub run after push.
 
 From Windows:
 

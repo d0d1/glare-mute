@@ -37,7 +37,8 @@ jobs:
         with:
           toolchain: 1.93.1
 
-      - name: Validate SignPath configuration
+      - name: Detect SignPath configuration
+        id: signpath
         shell: bash
         run: |
           missing=()
@@ -49,9 +50,16 @@ jobs:
           [[ -n "$SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_SETUP" ]] || missing+=("SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_SETUP variable")
           [[ -n "$SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_MSI" ]] || missing+=("SIGNPATH_ARTIFACT_CONFIGURATION_SLUG_MSI variable")
           if (( ${#missing[@]} > 0 )); then
-            printf 'Missing SignPath configuration:\n' >&2
-            printf '  - %s\n' "${missing[@]}" >&2
-            exit 1
+            {
+              echo 'signpath_enabled=false'
+              echo 'missing_signpath_configuration<<EOF'
+              printf '%s\n' "${missing[@]}"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+            printf 'SignPath not configured. Proceeding with unsigned release assets.\n'
+            printf '  - %s\n' "${missing[@]}"
+          else
+            echo 'signpath_enabled=true' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install dependencies
@@ -90,6 +98,7 @@ jobs:
 
       - name: Sign portable artifact
         id: sign-portable
+        if: steps.signpath.outputs.signpath_enabled == 'true'
         uses: SignPath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -104,6 +113,7 @@ jobs:
 
       - name: Sign setup artifact
         id: sign-setup
+        if: steps.signpath.outputs.signpath_enabled == 'true'
         uses: SignPath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -118,6 +128,7 @@ jobs:
 
       - name: Sign MSI artifact
         id: sign-msi
+        if: steps.signpath.outputs.signpath_enabled == 'true'
         uses: SignPath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -131,6 +142,7 @@ jobs:
           output-artifact-directory: signed/msi
 
       - name: Upload signed Windows bundle artifacts
+        if: steps.signpath.outputs.signpath_enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: glare-mute-windows-signed-${{ github.sha }}
@@ -140,8 +152,8 @@ jobs:
             signed/setup/*
             signed/msi/*
 
-      - name: Publish draft GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish draft GitHub Release (signed)
+        if: startsWith(github.ref, 'refs/tags/v') && steps.signpath.outputs.signpath_enabled == 'true'
         uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -151,3 +163,15 @@ jobs:
             signed/portable/*
             signed/setup/*
             signed/msi/*
+
+      - name: Publish draft GitHub Release (unsigned)
+        if: startsWith(github.ref, 'refs/tags/v') && steps.signpath.outputs.signpath_enabled != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          body_path: .github/release-body-unsigned.md
+          files: |
+            target/release/glare-mute-portable.exe
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/msi/*.msi
