@@ -4,7 +4,7 @@ import type { AppSnapshot, ProfileRule, VisualPreset, WindowDescriptor } from ".
 import type { Messages } from "../../lib/i18n";
 import { SelectedWindowDetails } from "../windows/SelectedWindowDetails";
 import { SavedProfilesSection } from "./SavedProfilesSection";
-import { effectMessage, effectStatusChip, effectStatusLabel } from "./effect-utils";
+import { effectStatusChip, effectStatusLabel } from "./effect-utils";
 
 type BusyAction = "saveProfile" | "profiles" | "copy" | "logs" | "settings" | null;
 
@@ -43,7 +43,7 @@ export function EffectPane({
   return (
     <section className="workflow-pane effect-pane">
       <div className="effect-header">
-        <PaneHeader subtitle={effectMessage(messages, snapshot)} title={messages.effect} />
+        <PaneHeader title={messages.effect} />
         <StatusChip
           label={effectStatusLabel(messages, snapshot.lens.status)}
           status={effectStatusChip(snapshot.lens.status)}

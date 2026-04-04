@@ -12,33 +12,6 @@ export function getMessages(language: ResolvedLanguage): Messages {
   const formatCount = (count: number) => number.format(count);
 
   const base = {
-    effectSummary: ({
-      coveredCount,
-      enabledProfileCount,
-      status,
-      visibleCount,
-    }: {
-      coveredCount: number;
-      enabledProfileCount: number;
-      status: LensStatus;
-      visibleCount: number;
-    }) => {
-      switch (status) {
-        case "pending":
-          return pendingSavedApps(language, enabledProfileCount, formatCount);
-        case "attached":
-          return activeSavedApps(
-            language,
-            Math.max(visibleCount, 1),
-            Math.max(coveredCount, 1),
-            enabledProfileCount,
-            formatCount
-          );
-        case "suspended":
-        case "detached":
-          return detachedEffectMessage(language);
-      }
-    },
     on: getOn(language),
     disable: getDisable(language),
     enable: getEnable(language),
@@ -111,12 +84,13 @@ export function getMessages(language: ResolvedLanguage): Messages {
       visibleCount: number;
     }) =>
       getSavedProfileSummary(language, enabled, matchCount, visibleCount, presetLabel, formatCount),
+    savedProfileStatusLabel: (status: "active" | "minimized" | "closed" | "off") =>
+      getSavedProfileStatusLabel(language, status),
     themeLabel: (theme: ThemePreference) => getThemeLabel(language, theme),
     windowEffectLabel: (status: LensStatus) => getWindowEffectLabel(language, status),
     windowState: (state: WindowAttachmentState) => getWindowState(language, state),
   } satisfies Pick<
     Messages,
-    | "effectSummary"
     | "on"
     | "disable"
     | "enable"
@@ -130,6 +104,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
     | "presetSummary"
     | "savedAppsSubtitle"
     | "savedProfileSummary"
+    | "savedProfileStatusLabel"
     | "themeLabel"
     | "windowEffectLabel"
     | "windowState"
@@ -878,6 +853,96 @@ function getThemeLabel(language: ResolvedLanguage, theme: ThemePreference) {
   }
 }
 
+function getSavedProfileStatusLabel(
+  language: ResolvedLanguage,
+  status: "active" | "minimized" | "closed" | "off"
+) {
+  switch (status) {
+    case "active":
+      return (() => {
+        switch (language) {
+          case "pt-BR":
+            return "Ativo";
+          case "es":
+            return "Activo";
+          case "fr":
+            return "Actif";
+          case "zh-Hans":
+            return "活动中";
+          case "hi":
+            return "सक्रिय";
+          case "ar":
+            return "نشط";
+          case "bn":
+            return "সক্রিয়";
+          case "en":
+            return "Active";
+        }
+      })();
+    case "minimized":
+      return (() => {
+        switch (language) {
+          case "pt-BR":
+            return "Minimizado";
+          case "es":
+            return "Minimizado";
+          case "fr":
+            return "Réduite";
+          case "zh-Hans":
+            return "已最小化";
+          case "hi":
+            return "मिनिमाइज़्ड";
+          case "ar":
+            return "مصغّر";
+          case "bn":
+            return "মিনিমাইজ করা";
+          case "en":
+            return "Minimized";
+        }
+      })();
+    case "closed":
+      return (() => {
+        switch (language) {
+          case "pt-BR":
+            return "Fechado";
+          case "es":
+            return "Cerrado";
+          case "fr":
+            return "Fermée";
+          case "zh-Hans":
+            return "已关闭";
+          case "hi":
+            return "बंद";
+          case "ar":
+            return "مغلق";
+          case "bn":
+            return "বন্ধ";
+          case "en":
+            return "Closed";
+        }
+      })();
+    case "off":
+      switch (language) {
+        case "pt-BR":
+          return "Desativado";
+        case "es":
+          return "Desactivado";
+        case "fr":
+          return "Désactivé";
+        case "zh-Hans":
+          return "已关闭";
+        case "hi":
+          return "बंद";
+        case "ar":
+          return "متوقف";
+        case "bn":
+          return "বন্ধ";
+        case "en":
+          return "Off";
+      }
+  }
+}
+
 function getWindowEffectLabel(language: ResolvedLanguage, status: LensStatus) {
   switch (status) {
     case "pending":
@@ -989,27 +1054,6 @@ function getWindowState(language: ResolvedLanguage, state: WindowAttachmentState
   }
 }
 
-function detachedEffectMessage(language: ResolvedLanguage) {
-  switch (language) {
-    case "pt-BR":
-      return "Escolha um efeito e salve-o para um aplicativo.";
-    case "es":
-      return "Elige un efecto y guárdalo para una aplicación.";
-    case "fr":
-      return "Choisissez un effet et enregistrez-le pour une application.";
-    case "zh-Hans":
-      return "选择一个效果并将其保存到某个应用。";
-    case "hi":
-      return "कोई प्रभाव चुनें और उसे किसी ऐप के लिए सहेजें।";
-    case "ar":
-      return "اختر تأثيرًا واحفظه لتطبيق.";
-    case "bn":
-      return "একটি ইফেক্ট বেছে নিয়ে সেটি একটি অ্যাপের জন্য সংরক্ষণ করুন।";
-    case "en":
-      return "Choose an effect and save it for an app.";
-  }
-}
-
 function getChooseWindow(language: ResolvedLanguage) {
   switch (language) {
     case "pt-BR":
@@ -1118,21 +1162,21 @@ function getUpdateSavedApp(language: ResolvedLanguage, presetLabel: string) {
 function getSaveProfileHintReady(language: ResolvedLanguage) {
   switch (language) {
     case "pt-BR":
-      return "Salvar adiciona este app à lista de apps monitorados.";
+      return "Salvar lembra este efeito para este app.";
     case "es":
-      return "Guardar añade esta app a la lista de apps monitorizadas.";
+      return "Guardar recuerda este efecto para esta app.";
     case "fr":
-      return "Enregistrer ajoute cette appli à la liste des applis surveillées.";
+      return "Enregistrer mémorise cet effet pour cette appli.";
     case "zh-Hans":
-      return "保存后，此应用会加入持续监控列表。";
+      return "保存后，系统会记住这个应用的效果。";
     case "hi":
-      return "सहेजने पर यह ऐप निगरानी सूची में जुड़ जाएगा।";
+      return "सहेजने पर यह प्रभाव इस ऐप के लिए याद रखा जाएगा।";
     case "ar":
-      return "سيؤدي الحفظ إلى إضافة هذا التطبيق إلى قائمة التطبيقات المراقبة.";
+      return "سيؤدي الحفظ إلى تذكّر هذا التأثير لهذا التطبيق.";
     case "bn":
-      return "সংরক্ষণ করলে এই অ্যাপটি নজরদারি তালিকায় যোগ হবে।";
+      return "সংরক্ষণ করলে এই অ্যাপের জন্য এই ইফেক্টটি মনে রাখা হবে।";
     case "en":
-      return "Saving adds this app to the monitored list.";
+      return "Saving remembers this effect for this app.";
   }
 }
 
@@ -1160,21 +1204,21 @@ function getSaveProfileHintMinimized(language: ResolvedLanguage) {
 function getUpdateSavedAppHintReady(language: ResolvedLanguage) {
   switch (language) {
     case "pt-BR":
-      return "Salvar novamente atualiza o efeito salvo para este app.";
+      return "Atualizar muda o efeito salvo para este app.";
     case "es":
-      return "Guardar de nuevo actualiza el efecto guardado para esta app.";
+      return "Actualizar cambia el efecto guardado para esta app.";
     case "fr":
-      return "Enregistrer à nouveau met à jour l'effet enregistré pour cette appli.";
+      return "Mettre à jour change l'effet enregistré pour cette appli.";
     case "zh-Hans":
-      return "再次保存会更新此应用已保存的效果。";
+      return "更新会更改这个应用已保存的效果。";
     case "hi":
-      return "फिर से सहेजने पर इस ऐप के लिए सहेजा गया प्रभाव अपडेट होगा।";
+      return "अपडेट करने पर इस ऐप के लिए सहेजा गया प्रभाव बदल जाएगा।";
     case "ar":
-      return "سيؤدي الحفظ مرة أخرى إلى تحديث التأثير المحفوظ لهذا التطبيق.";
+      return "سيؤدي التحديث إلى تغيير التأثير المحفوظ لهذا التطبيق.";
     case "bn":
-      return "আবার সংরক্ষণ করলে এই অ্যাপের জন্য সংরক্ষিত ইফেক্টটি আপডেট হবে।";
+      return "আপডেট করলে এই অ্যাপের জন্য সংরক্ষিত ইফেক্টটি বদলে যাবে।";
     case "en":
-      return "Saving again updates the saved effect for this app.";
+      return "Updating changes the saved effect for this app.";
   }
 }
 
@@ -1298,24 +1342,23 @@ function getSavedProfileSummary(
   if (matchCount === 0) {
     switch (language) {
       case "pt-BR":
-        return `${presetLabel} está aguardando uma janela correspondente.`;
+        return `${presetLabel} está salvo, mas esse app não está aberto agora.`;
       case "es":
-        return `${presetLabel} está esperando una ventana coincidente.`;
+        return `${presetLabel} está guardado, pero esta app no está abierta ahora.`;
       case "fr":
-        return `${presetLabel} attend une fenêtre correspondante.`;
+        return `${presetLabel} est enregistré, mais cette appli n'est pas ouverte pour l'instant.`;
       case "zh-Hans":
-        return `${presetLabel} 正在等待匹配的窗口。`;
+        return `${presetLabel} 已保存，但这个应用当前没有打开。`;
       case "hi":
-        return `${presetLabel} किसी मेल खाने वाली विंडो का इंतज़ार कर रहा है।`;
+        return `${presetLabel} सहेजा गया है, लेकिन यह ऐप अभी खुला नहीं है।`;
       case "ar":
-        return `${presetLabel} ينتظر نافذة مطابقة.`;
+        return `${presetLabel} محفوظ، لكن هذا التطبيق ليس مفتوحًا الآن.`;
       case "bn":
-        return `${presetLabel} একটি মেলানো উইন্ডোর জন্য অপেক্ষা করছে।`;
+        return `${presetLabel} সংরক্ষিত আছে, কিন্তু এই অ্যাপটি এখন খোলা নেই।`;
       case "en":
-        return `${presetLabel} is waiting for a matching window.`;
+        return `${presetLabel} is saved, but this app is not open right now.`;
     }
   }
-
   switch (language) {
     case "pt-BR":
       return `${presetLabel} está ativo em ${formatCount(Math.max(visibleCount, 1))} janelas.`;
@@ -1333,74 +1376,6 @@ function getSavedProfileSummary(
       return `${presetLabel} ${formatCount(Math.max(visibleCount, 1))}টি উইন্ডোতে সক্রিয় আছে।`;
     case "en":
       return `${presetLabel} is active on ${formatCount(Math.max(visibleCount, 1))} windows.`;
-  }
-}
-
-function pendingSavedApps(
-  language: ResolvedLanguage,
-  enabledProfileCount: number,
-  formatCount: (count: number) => string
-) {
-  switch (language) {
-    case "pt-BR":
-      return enabledProfileCount === 1
-        ? "Um app salvo está aguardando uma janela correspondente."
-        : `${formatCount(enabledProfileCount)} apps salvos estão aguardando janelas correspondentes.`;
-    case "es":
-      return enabledProfileCount === 1
-        ? "Una app guardada está esperando una ventana coincidente."
-        : `${formatCount(enabledProfileCount)} apps guardadas están esperando ventanas coincidentes.`;
-    case "fr":
-      return enabledProfileCount === 1
-        ? "Une appli enregistrée attend une fenêtre correspondante."
-        : `${formatCount(enabledProfileCount)} applis enregistrées attendent des fenêtres correspondantes.`;
-    case "zh-Hans":
-      return enabledProfileCount === 1
-        ? "一个已保存的应用正在等待匹配的窗口。"
-        : `${formatCount(enabledProfileCount)} 个已保存的应用正在等待匹配的窗口。`;
-    case "hi":
-      return enabledProfileCount === 1
-        ? "एक सहेजा गया ऐप किसी मेल खाने वाली विंडो का इंतज़ार कर रहा है।"
-        : `${formatCount(enabledProfileCount)} सहेजे गए ऐप मेल खाने वाली विंडो का इंतज़ार कर रहे हैं।`;
-    case "ar":
-      return enabledProfileCount === 1
-        ? "يوجد تطبيق محفوظ ينتظر نافذة مطابقة."
-        : `توجد ${formatCount(enabledProfileCount)} تطبيقات محفوظة تنتظر نوافذ مطابقة.`;
-    case "bn":
-      return enabledProfileCount === 1
-        ? "একটি সংরক্ষিত অ্যাপ একটি মেলানো উইন্ডোর জন্য অপেক্ষা করছে।"
-        : `${formatCount(enabledProfileCount)}টি সংরক্ষিত অ্যাপ মেলানো উইন্ডোর জন্য অপেক্ষা করছে।`;
-    case "en":
-      return enabledProfileCount === 1
-        ? "One saved app is waiting for a matching window."
-        : `${formatCount(enabledProfileCount)} saved apps are waiting for matching windows.`;
-  }
-}
-
-function activeSavedApps(
-  language: ResolvedLanguage,
-  visibleCount: number,
-  coveredCount: number,
-  enabledProfileCount: number,
-  formatCount: (count: number) => string
-) {
-  switch (language) {
-    case "pt-BR":
-      return `Os efeitos estão ativos em ${formatCount(visibleCount)} janelas de ${formatCount(Math.min(enabledProfileCount, coveredCount))} apps salvos.`;
-    case "es":
-      return `Los efectos están activos en ${formatCount(visibleCount)} ventanas de ${formatCount(Math.min(enabledProfileCount, coveredCount))} apps guardadas.`;
-    case "fr":
-      return `Les effets sont actifs sur ${formatCount(visibleCount)} fenêtres provenant de ${formatCount(Math.min(enabledProfileCount, coveredCount))} applis enregistrées.`;
-    case "zh-Hans":
-      return `效果已在 ${formatCount(visibleCount)} 个窗口上启用，来自 ${formatCount(Math.min(enabledProfileCount, coveredCount))} 个已保存的应用。`;
-    case "hi":
-      return `प्रभाव ${formatCount(visibleCount)} विंडो पर सक्रिय हैं, जो ${formatCount(Math.min(enabledProfileCount, coveredCount))} सहेजे गए ऐप से हैं।`;
-    case "ar":
-      return `التأثيرات مفعّلة على ${formatCount(visibleCount)} نوافذ من ${formatCount(Math.min(enabledProfileCount, coveredCount))} تطبيقات محفوظة.`;
-    case "bn":
-      return `ইফেক্ট ${formatCount(visibleCount)}টি উইন্ডোতে সক্রিয়, যা ${formatCount(Math.min(enabledProfileCount, coveredCount))}টি সংরক্ষিত অ্যাপ থেকে এসেছে।`;
-    case "en":
-      return `Effects are active on ${formatCount(visibleCount)} windows from ${formatCount(Math.min(enabledProfileCount, coveredCount))} saved apps.`;
   }
 }
 

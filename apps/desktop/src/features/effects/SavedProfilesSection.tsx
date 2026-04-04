@@ -2,7 +2,7 @@ import { PaneHeader } from "../../components/PaneHeader";
 import { StatusChip } from "../../components/StatusChip";
 import type { AppSnapshot, ProfileRule } from "../../lib/contracts";
 import type { Messages } from "../../lib/i18n";
-import { effectStatusChip } from "./effect-utils";
+import { savedProfileStatusTone } from "./effect-utils";
 
 type BusyAction = "saveProfile" | "profiles" | "copy" | "logs" | "settings" | null;
 
@@ -37,11 +37,16 @@ export function SavedProfilesSection({
             const visibleCount =
               runtime?.matchingTargets.filter((target) => target.attachmentState === "available")
                 .length ?? 0;
-            const lensStatus = !profile.enabled
-              ? "detached"
+            const hasMinimizedTarget =
+              runtime?.matchingTargets.some((target) => target.attachmentState === "minimized") ??
+              false;
+            const profileStatus = !profile.enabled
+              ? "off"
               : visibleCount > 0
-                ? "attached"
-                : "pending";
+                ? "active"
+                : hasMinimizedTarget
+                  ? "minimized"
+                  : "closed";
 
             return (
               <li className="saved-profile-card" key={profile.id}>
@@ -58,8 +63,8 @@ export function SavedProfilesSection({
                     </p>
                   </div>
                   <StatusChip
-                    label={messages.windowEffectLabel(lensStatus)}
-                    status={effectStatusChip(lensStatus)}
+                    label={messages.savedProfileStatusLabel(profileStatus)}
+                    status={savedProfileStatusTone(profileStatus)}
                   />
                 </div>
 

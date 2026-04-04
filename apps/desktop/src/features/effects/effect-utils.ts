@@ -3,18 +3,9 @@ import type { AppSnapshot, PresetDefinition, RuntimeEvent } from "../../lib/cont
 import type { Messages } from "../../lib/i18n";
 
 export function effectStatusLabel(messages: Messages, status: AppSnapshot["lens"]["status"]) {
-  return messages.windowEffectLabel(status);
-}
-
-export function effectMessage(messages: Messages, snapshot: AppSnapshot) {
-  return messages.effectSummary({
-    coveredCount: snapshot.lens.coveredTargets.length,
-    enabledProfileCount: snapshot.settings.profiles.filter((profile) => profile.enabled).length,
-    status: snapshot.lens.status,
-    visibleCount: snapshot.lens.coveredTargets.filter(
-      (target) => target.attachmentState === "available"
-    ).length,
-  });
+  return messages.savedProfileStatusLabel(
+    status === "attached" ? "active" : status === "pending" ? "closed" : "off"
+  );
 }
 
 export function effectStatusChip(status: AppSnapshot["lens"]["status"]): StatusTone {
@@ -26,6 +17,19 @@ export function effectStatusChip(status: AppSnapshot["lens"]["status"]): StatusT
     case "detached":
       return "neutral";
     case "suspended":
+      return "neutral";
+  }
+}
+
+export function savedProfileStatusTone(
+  status: "active" | "minimized" | "closed" | "off"
+): StatusTone {
+  switch (status) {
+    case "active":
+      return "available";
+    case "minimized":
+    case "closed":
+    case "off":
       return "neutral";
   }
 }

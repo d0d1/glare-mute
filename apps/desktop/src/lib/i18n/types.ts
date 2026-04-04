@@ -78,12 +78,6 @@ export interface Messages {
   windowClass: string;
   windowsMatch: (count: number) => string;
   windowsShown: (count: number) => string;
-  effectSummary: (args: {
-    coveredCount: number;
-    enabledProfileCount: number;
-    status: LensStatus;
-    visibleCount: number;
-  }) => string;
   saveProfileButton: (args: {
     busy: boolean;
     hasPreset: boolean;
@@ -104,6 +98,7 @@ export interface Messages {
     presetLabel: string;
     visibleCount: number;
   }) => string;
+  savedProfileStatusLabel: (status: "active" | "minimized" | "closed" | "off") => string;
   themeLabel: (theme: ThemePreference) => string;
   windowEffectLabel: (status: LensStatus) => string;
   windowState: (state: WindowAttachmentState) => string;
