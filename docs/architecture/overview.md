@@ -17,6 +17,7 @@ That split is deliberate:
 - the tray application lifecycle
 - structured logging
 - settings persistence
+- saved app profile persistence and hydration
 - capability probing
 - command handlers exposed to the frontend
 
@@ -26,7 +27,7 @@ That split is deliberate:
 
 - theme preference
 - preset catalog
-- profile rules
+- saved app profile rules
 - capability descriptors
 - diagnostics snapshots
 
@@ -44,9 +45,9 @@ These types are the stable interface between the frontend and the backend.
 
 `apps/desktop/src/` renders:
 
-- the current session state
+- the current saved app state
 - theme controls
-- action surfaces
+- action surfaces for saving, updating, and disabling app effects
 - diagnostics and paths
 
 The frontend talks to the backend through `desktopClient`. In Tauri it uses real commands. In browser preview it uses a mock runtime that persists to `localStorage`.

@@ -10,7 +10,8 @@ The main window exposes:
 
 - backend identity
 - active lens state
-- selected target window details
+- selected window details
+- saved app state and runtime status
 - current window candidate list
 - current settings path
 - current log path
@@ -40,6 +41,7 @@ Use the `Copy Debug Report` action to capture a snapshot that includes:
 1. Reproduce in browser preview if the issue is UI-only.
 2. Reproduce in the desktop shell if tray, path, or Tauri behavior is involved.
 3. Check the diagnostics panel before inspecting raw files.
-4. Confirm the active target window id, title, executable path, and class before assuming picker failure.
-5. Open the logs directory if the in-app event buffer is not enough.
-6. Ask for extra environment detail only when the app cannot report enough on its own.
+4. Confirm the selected window id, title, executable path, and class before assuming picker failure.
+5. Confirm the saved app rule that was created for that window before assuming the native matcher is wrong.
+6. Open the logs directory if the in-app event buffer is not enough.
+7. Ask for extra environment detail only when the app cannot report enough on its own.

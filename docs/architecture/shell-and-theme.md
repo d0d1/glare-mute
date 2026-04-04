@@ -1,11 +1,11 @@
 # Desktop Shell And Theme System
 
-The app is tray-first, but the main window still matters because that is where diagnostics, profiles, and review tooling live.
+The app is tray-first, but the main window still matters because that is where saved apps, diagnostics, and review tooling live.
 
 ## Tray shell responsibilities
 
 - expose the app even when the main window is hidden
-- provide fast access back to the current effect session
+- provide fast access back to the current saved app state
 - reopen the main window without rebuilding state
 - stay single-instance
 
