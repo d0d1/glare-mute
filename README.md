@@ -20,11 +20,11 @@ A typical use case is a bright legacy Windows app that stays white even when the
 
 ### Original
 
-![Bright IRPF window before applying an effect](docs/images/01_irpf_original.png)
+![Bright Registry Editor window before applying an effect](docs/images/04_regedit_original.png)
 
 ### Invert applied
 
-![IRPF window with Glare mute invert applied](docs/images/02_irpf_inverted.png)
+![Registry Editor window with Glare mute invert applied](docs/images/05_regedit_inverted.png)
 
 ## Platform support
 
