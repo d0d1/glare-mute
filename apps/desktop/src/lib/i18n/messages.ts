@@ -14,44 +14,53 @@ export function getMessages(language: ResolvedLanguage): Messages {
   const base = {
     effectSummary: ({
       coveredCount,
-      presetLabel,
+      enabledProfileCount,
       status,
-      targetTitle,
       visibleCount,
     }: {
       coveredCount: number;
-      presetLabel: string;
+      enabledProfileCount: number;
       status: LensStatus;
-      targetTitle: string | null;
       visibleCount: number;
     }) => {
       switch (status) {
         case "pending":
-          return coveredCount > 1
-            ? pendingMany(language, presetLabel)
-            : pendingOne(language, presetLabel, targetTitle);
+          return pendingSavedApps(language, enabledProfileCount, formatCount);
         case "attached":
-          return coveredCount > 1
-            ? appliedMany(language, presetLabel, Math.max(visibleCount, 1), formatCount)
-            : appliedOne(language, presetLabel, targetTitle);
+          return activeSavedApps(
+            language,
+            Math.max(visibleCount, 1),
+            Math.max(coveredCount, 1),
+            enabledProfileCount,
+            formatCount
+          );
         case "suspended":
         case "detached":
           return detachedEffectMessage(language);
       }
     },
-    applyButton: ({
+    on: getOn(language),
+    disable: getDisable(language),
+    enable: getEnable(language),
+    remove: getRemove(language),
+    saveForApp: getSaveForApp(language),
+    savedApps: getSavedApps(language),
+    savedAppsEmpty: getSavedAppsEmpty(language),
+    saveProfileButton: ({
       busy,
       hasPreset,
+      hasSavedProfile,
       hasSelectedWindow,
       presetLabel,
     }: {
       busy: boolean;
       hasPreset: boolean;
+      hasSavedProfile: boolean;
       hasSelectedWindow: boolean;
       presetLabel: string | null;
     }) => {
       if (busy) {
-        return getApplying(language);
+        return getSavingProfile(language);
       }
 
       if (!hasSelectedWindow) {
@@ -62,31 +71,65 @@ export function getMessages(language: ResolvedLanguage): Messages {
         return getChooseEffect(language);
       }
 
-      return getApplyPreset(language, presetLabel);
+      return hasSavedProfile
+        ? getUpdateSavedApp(language, presetLabel)
+        : getSavePresetForApp(language, presetLabel);
     },
-    applyHint: (attachmentState: WindowAttachmentState | null) => {
+    saveProfileHint: ({
+      attachmentState,
+      hasSavedProfile,
+    }: {
+      attachmentState: WindowAttachmentState | null;
+      hasSavedProfile: boolean;
+    }) => {
       if (!attachmentState) {
         return getSelectWindowToContinue(language);
       }
 
       if (attachmentState === "minimized") {
-        return getApplyHintMinimized(language);
+        return hasSavedProfile
+          ? getUpdateSavedAppHintMinimized(language)
+          : getSaveProfileHintMinimized(language);
       }
 
-      return getApplyHintReady(language);
+      return hasSavedProfile
+        ? getUpdateSavedAppHintReady(language)
+        : getSaveProfileHintReady(language);
     },
     presetLabel: (preset: VisualPreset) => getPresetLabel(language, preset),
     presetSummary: (preset: VisualPreset) => getPresetSummary(language, preset),
+    savedAppsSubtitle: (count: number) => getSavedAppsSubtitle(language, count, formatCount),
+    savedProfileSummary: ({
+      enabled,
+      matchCount,
+      presetLabel,
+      visibleCount,
+    }: {
+      enabled: boolean;
+      matchCount: number;
+      presetLabel: string;
+      visibleCount: number;
+    }) =>
+      getSavedProfileSummary(language, enabled, matchCount, visibleCount, presetLabel, formatCount),
     themeLabel: (theme: ThemePreference) => getThemeLabel(language, theme),
     windowEffectLabel: (status: LensStatus) => getWindowEffectLabel(language, status),
     windowState: (state: WindowAttachmentState) => getWindowState(language, state),
   } satisfies Pick<
     Messages,
     | "effectSummary"
-    | "applyButton"
-    | "applyHint"
+    | "on"
+    | "disable"
+    | "enable"
+    | "remove"
+    | "saveForApp"
+    | "savedApps"
+    | "savedAppsEmpty"
+    | "saveProfileButton"
+    | "saveProfileHint"
     | "presetLabel"
     | "presetSummary"
+    | "savedAppsSubtitle"
+    | "savedProfileSummary"
     | "themeLabel"
     | "windowEffectLabel"
     | "windowState"
@@ -97,8 +140,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "Détails avancés",
-        appSubtitle:
-          "Choisissez une fenêtre et appliquez un effet sans changer le reste du bureau.",
+        appSubtitle: "Enregistrez des effets par application sans changer le reste du bureau.",
         application: "Application",
         applied: "Appliqué",
         applying: "Application…",
@@ -112,7 +154,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "Copié",
         copying: "Copie…",
         effect: "Effet",
-        effectHintDetached: "Choisissez l'apparence de la fenêtre sélectionnée.",
+        effectHintDetached: "Choisissez l'effet à enregistrer pour l'application sélectionnée.",
         executablePath: "Chemin de l'exécutable",
         executableUnavailable: "Exécutable indisponible",
         filterWindows: "Filtrer les fenêtres",
@@ -141,10 +183,11 @@ export function getMessages(language: ResolvedLanguage): Messages {
           "Conserver automatiquement l'effet sur les nouvelles fenêtres de la même application lorsque c'est possible.",
         runtime: "Exécution",
         runtimeSubtitle: "Détails d'exécution locaux uniquement.",
-        selectWindowToContinue: "Sélectionnez une fenêtre pour continuer.",
+        selectWindowToContinue:
+          "Sélectionnez une fenêtre pour enregistrer ou mettre à jour un effet.",
         selectedWindow: "Fenêtre sélectionnée",
         selectedWindowEmpty:
-          "Sélectionnez une fenêtre dans la liste pour choisir où appliquer l'effet.",
+          "Sélectionnez une fenêtre dans la liste pour enregistrer ou mettre à jour un effet pour cette application.",
         settings: "Paramètres",
         settingsFile: "Fichier des paramètres",
         state: "État",
@@ -167,7 +210,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "高级详情",
-        appSubtitle: "选择一个窗口并应用效果，而不影响桌面的其他部分。",
+        appSubtitle: "为单个应用保存效果，而不影响桌面的其他部分。",
         application: "应用程序",
         applied: "已应用",
         applying: "正在应用…",
@@ -181,7 +224,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "已复制",
         copying: "正在复制…",
         effect: "效果",
-        effectHintDetached: "选择所选窗口的显示方式。",
+        effectHintDetached: "选择要为所选应用保存的效果。",
         executablePath: "可执行文件路径",
         executableUnavailable: "可执行文件不可用",
         filterWindows: "筛选窗口",
@@ -207,9 +250,9 @@ export function getMessages(language: ResolvedLanguage): Messages {
         relatedWindowsDescription: "在可能的情况下，自动将效果保留在同一应用的新窗口上。",
         runtime: "运行时",
         runtimeSubtitle: "仅限本地的运行时详情。",
-        selectWindowToContinue: "选择一个窗口以继续。",
+        selectWindowToContinue: "选择一个窗口以保存或更新效果。",
         selectedWindow: "已选窗口",
-        selectedWindowEmpty: "从列表中选择一个窗口，以决定将效果应用到哪里。",
+        selectedWindowEmpty: "从列表中选择一个窗口，为此应用保存或更新效果。",
         settings: "设置",
         settingsFile: "设置文件",
         state: "状态",
@@ -231,7 +274,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "विस्तृत विवरण",
-        appSubtitle: "एक विंडो चुनें और बाकी डेस्कटॉप बदले बिना उस पर प्रभाव लागू करें।",
+        appSubtitle: "बाकी डेस्कटॉप बदले बिना अलग-अलग ऐप्स के लिए इफेक्ट सहेजें।",
         application: "ऐप",
         applied: "लागू",
         applying: "लागू किया जा रहा है…",
@@ -245,7 +288,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "कॉपी हो गया",
         copying: "कॉपी किया जा रहा है…",
         effect: "प्रभाव",
-        effectHintDetached: "चुनें कि चुनी गई विंडो कैसी दिखे।",
+        effectHintDetached: "चुने गए ऐप के लिए सहेजा जाने वाला इफेक्ट चुनें।",
         executablePath: "एक्ज़ीक्यूटेबल पथ",
         executableUnavailable: "एक्ज़ीक्यूटेबल उपलब्ध नहीं है",
         filterWindows: "विंडो फ़िल्टर करें",
@@ -271,9 +314,9 @@ export function getMessages(language: ResolvedLanguage): Messages {
         relatedWindowsDescription: "जहाँ संभव हो, उसी ऐप की नई विंडो पर प्रभाव अपने आप बनाए रखें।",
         runtime: "रनटाइम",
         runtimeSubtitle: "सिर्फ़ लोकल रनटाइम विवरण।",
-        selectWindowToContinue: "आगे बढ़ने के लिए एक विंडो चुनें।",
+        selectWindowToContinue: "इफेक्ट सहेजने या अपडेट करने के लिए एक विंडो चुनें।",
         selectedWindow: "चुनी गई विंडो",
-        selectedWindowEmpty: "प्रभाव कहाँ लागू करना है, यह चुनने के लिए सूची से एक विंडो चुनें।",
+        selectedWindowEmpty: "इस ऐप के लिए इफेक्ट सहेजने या अपडेट करने के लिए सूची से एक विंडो चुनें।",
         settings: "सेटिंग्स",
         settingsFile: "सेटिंग्स फ़ाइल",
         state: "स्थिति",
@@ -295,7 +338,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "تفاصيل متقدمة",
-        appSubtitle: "اختر نافذة وطبّق تأثيرًا عليها من دون تغيير بقية سطح المكتب.",
+        appSubtitle: "احفظ تأثيرات لكل تطبيق من دون تغيير بقية سطح المكتب.",
         application: "التطبيق",
         applied: "مطبّق",
         applying: "جارٍ التطبيق…",
@@ -309,7 +352,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "تم النسخ",
         copying: "جارٍ النسخ…",
         effect: "التأثير",
-        effectHintDetached: "اختر كيف يجب أن تبدو النافذة المحددة.",
+        effectHintDetached: "اختر التأثير الذي سيتم حفظه للتطبيق المحدد.",
         executablePath: "مسار الملف التنفيذي",
         executableUnavailable: "الملف التنفيذي غير متاح",
         filterWindows: "تصفية النوافذ",
@@ -337,9 +380,9 @@ export function getMessages(language: ResolvedLanguage): Messages {
           "أبقِ التأثير تلقائيًا على النوافذ الجديدة من التطبيق نفسه عندما يكون ذلك ممكنًا.",
         runtime: "بيئة التشغيل",
         runtimeSubtitle: "تفاصيل تشغيل محلية فقط.",
-        selectWindowToContinue: "اختر نافذة للمتابعة.",
+        selectWindowToContinue: "اختر نافذة لحفظ تأثير أو تحديثه.",
         selectedWindow: "النافذة المحددة",
-        selectedWindowEmpty: "اختر نافذة من القائمة لتحديد مكان تطبيق التأثير.",
+        selectedWindowEmpty: "اختر نافذة من القائمة لحفظ تأثير لهذا التطبيق أو تحديثه.",
         settings: "الإعدادات",
         settingsFile: "ملف الإعدادات",
         state: "الحالة",
@@ -361,7 +404,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "উন্নত বিবরণ",
-        appSubtitle: "একটি উইন্ডো বেছে নিন এবং ডেস্কটপের বাকি অংশ না বদলে তাতে একটি ইফেক্ট প্রয়োগ করুন।",
+        appSubtitle: "ডেস্কটপের বাকি অংশ না বদলে আলাদা অ্যাপের জন্য ইফেক্ট সংরক্ষণ করুন।",
         application: "অ্যাপ",
         applied: "প্রয়োগ করা হয়েছে",
         applying: "প্রয়োগ করা হচ্ছে…",
@@ -375,7 +418,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "কপি হয়েছে",
         copying: "কপি করা হচ্ছে…",
         effect: "ইফেক্ট",
-        effectHintDetached: "নির্বাচিত উইন্ডোটি কেমন দেখাবে তা বেছে নিন।",
+        effectHintDetached: "নির্বাচিত অ্যাপের জন্য কোন ইফেক্ট সংরক্ষণ হবে তা বেছে নিন।",
         executablePath: "এক্সিকিউটেবল পথ",
         executableUnavailable: "এক্সিকিউটেবল উপলব্ধ নয়",
         filterWindows: "উইন্ডো ফিল্টার করুন",
@@ -401,9 +444,10 @@ export function getMessages(language: ResolvedLanguage): Messages {
         relatedWindowsDescription: "যখন সম্ভব, একই অ্যাপের নতুন উইন্ডোগুলোতে ইফেক্টটি স্বয়ংক্রিয়ভাবে চালু রাখুন।",
         runtime: "রানটাইম",
         runtimeSubtitle: "শুধু স্থানীয় রানটাইম বিবরণ।",
-        selectWindowToContinue: "চালিয়ে যেতে একটি উইন্ডো বেছে নিন।",
+        selectWindowToContinue: "ইফেক্ট সংরক্ষণ বা আপডেট করতে একটি উইন্ডো বেছে নিন।",
         selectedWindow: "নির্বাচিত উইন্ডো",
-        selectedWindowEmpty: "ইফেক্ট কোথায় যাবে তা বেছে নিতে তালিকা থেকে একটি উইন্ডো নির্বাচন করুন।",
+        selectedWindowEmpty:
+          "এই অ্যাপের জন্য ইফেক্ট সংরক্ষণ বা আপডেট করতে তালিকা থেকে একটি উইন্ডো নির্বাচন করুন।",
         settings: "সেটিংস",
         settingsFile: "সেটিংস ফাইল",
         state: "অবস্থা",
@@ -426,8 +470,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "Detalhes avançados",
-        appSubtitle:
-          "Escolha uma janela e aplique um efeito sem mudar o resto da área de trabalho.",
+        appSubtitle: "Salve efeitos por aplicativo sem mudar o resto da área de trabalho.",
         application: "Aplicativo",
         applied: "Aplicado",
         applying: "Aplicando…",
@@ -441,7 +484,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "Copiado",
         copying: "Copiando…",
         effect: "Efeito",
-        effectHintDetached: "Escolha como a janela selecionada deve ficar.",
+        effectHintDetached: "Escolha o efeito que será salvo para o aplicativo selecionado.",
         executablePath: "Caminho do executável",
         executableUnavailable: "Executável indisponível",
         filterWindows: "Filtrar janelas",
@@ -469,9 +512,10 @@ export function getMessages(language: ResolvedLanguage): Messages {
           "Mantenha automaticamente o efeito em novas janelas do mesmo aplicativo quando possível.",
         runtime: "Tempo de execução",
         runtimeSubtitle: "Detalhes locais do tempo de execução.",
-        selectWindowToContinue: "Selecione uma janela para continuar.",
+        selectWindowToContinue: "Selecione uma janela para salvar ou atualizar um efeito.",
         selectedWindow: "Janela selecionada",
-        selectedWindowEmpty: "Selecione uma janela na lista para escolher onde o efeito deve ir.",
+        selectedWindowEmpty:
+          "Selecione uma janela na lista para salvar ou atualizar um efeito para esse aplicativo.",
         settings: "Configurações",
         settingsFile: "Arquivo de configurações",
         state: "Estado",
@@ -494,7 +538,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "Detalles avanzados",
-        appSubtitle: "Elige una ventana y aplica un efecto sin cambiar el resto del escritorio.",
+        appSubtitle: "Guarda efectos por aplicación sin cambiar el resto del escritorio.",
         application: "Aplicación",
         applied: "Aplicado",
         applying: "Aplicando…",
@@ -508,7 +552,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "Copiado",
         copying: "Copiando…",
         effect: "Efecto",
-        effectHintDetached: "Elige cómo debe verse la ventana seleccionada.",
+        effectHintDetached: "Elige el efecto que se guardará para la aplicación seleccionada.",
         executablePath: "Ruta del ejecutable",
         executableUnavailable: "Ejecutable no disponible",
         filterWindows: "Filtrar ventanas",
@@ -536,10 +580,10 @@ export function getMessages(language: ResolvedLanguage): Messages {
           "Mantén automáticamente el efecto en nuevas ventanas de la misma aplicación cuando sea posible.",
         runtime: "Tiempo de ejecución",
         runtimeSubtitle: "Detalles locales del tiempo de ejecución.",
-        selectWindowToContinue: "Selecciona una ventana para continuar.",
+        selectWindowToContinue: "Selecciona una ventana para guardar o actualizar un efecto.",
         selectedWindow: "Ventana seleccionada",
         selectedWindowEmpty:
-          "Selecciona una ventana de la lista para elegir dónde debe ir el efecto.",
+          "Selecciona una ventana de la lista para guardar o actualizar un efecto para esa aplicación.",
         settings: "Configuración",
         settingsFile: "Archivo de configuración",
         state: "Estado",
@@ -562,8 +606,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
       return {
         ...base,
         advancedDetails: "Advanced details",
-        appSubtitle:
-          "Choose a window and apply an effect without changing the rest of the desktop.",
+        appSubtitle: "Save per-app effects without changing the rest of the desktop.",
         application: "Application",
         applied: "Applied",
         applying: "Applying…",
@@ -577,7 +620,7 @@ export function getMessages(language: ResolvedLanguage): Messages {
         copied: "Copied",
         copying: "Copying…",
         effect: "Effect",
-        effectHintDetached: "Choose how the selected window should look.",
+        effectHintDetached: "Choose the effect to save for the selected app.",
         executablePath: "Executable path",
         executableUnavailable: "Executable unavailable",
         filterWindows: "Filter windows",
@@ -605,9 +648,10 @@ export function getMessages(language: ResolvedLanguage): Messages {
           "Automatically keep the effect on new windows from the same app when possible.",
         runtime: "Runtime",
         runtimeSubtitle: "Local-only runtime details.",
-        selectWindowToContinue: "Select a window to continue.",
+        selectWindowToContinue: "Select a window to save or update an effect.",
         selectedWindow: "Selected window",
-        selectedWindowEmpty: "Select a window from the list to choose where the effect should go.",
+        selectedWindowEmpty:
+          "Select a window from the list to save or update an effect for that app.",
         settings: "Settings",
         settingsFile: "Settings file",
         state: "State",
@@ -948,153 +992,21 @@ function getWindowState(language: ResolvedLanguage, state: WindowAttachmentState
 function detachedEffectMessage(language: ResolvedLanguage) {
   switch (language) {
     case "pt-BR":
-      return "Escolha como a janela selecionada deve ficar.";
+      return "Escolha um efeito e salve-o para um aplicativo.";
     case "es":
-      return "Elige cómo debe verse la ventana seleccionada.";
+      return "Elige un efecto y guárdalo para una aplicación.";
     case "fr":
-      return "Choisissez l'apparence de la fenêtre sélectionnée.";
+      return "Choisissez un effet et enregistrez-le pour une application.";
     case "zh-Hans":
-      return "选择所选窗口的显示方式。";
+      return "选择一个效果并将其保存到某个应用。";
     case "hi":
-      return "चुनें कि चुनी गई विंडो कैसी दिखे।";
+      return "कोई प्रभाव चुनें और उसे किसी ऐप के लिए सहेजें।";
     case "ar":
-      return "اختر كيف يجب أن تبدو النافذة المحددة.";
+      return "اختر تأثيرًا واحفظه لتطبيق.";
     case "bn":
-      return "নির্বাচিত উইন্ডোটি কেমন দেখাবে তা বেছে নিন।";
+      return "একটি ইফেক্ট বেছে নিয়ে সেটি একটি অ্যাপের জন্য সংরক্ষণ করুন।";
     case "en":
-      return "Choose how the selected window should look.";
-  }
-}
-
-function appliedOne(language: ResolvedLanguage, presetLabel: string, targetTitle: string | null) {
-  const title = targetTitle ?? fallbackTarget(language);
-  switch (language) {
-    case "pt-BR":
-      return `${presetLabel} está ativo em ${title}.`;
-    case "es":
-      return `${presetLabel} está activo en ${title}.`;
-    case "fr":
-      return `${presetLabel} est actif sur ${title}.`;
-    case "zh-Hans":
-      return `${presetLabel} 已在 ${title} 上启用。`;
-    case "hi":
-      return `${presetLabel} ${title} पर सक्रिय है।`;
-    case "ar":
-      return `${presetLabel} مفعّل على ${title}.`;
-    case "bn":
-      return `${presetLabel} ${title}-এ সক্রিয় আছে।`;
-    case "en":
-      return `${presetLabel} is active on ${title}.`;
-  }
-}
-
-function appliedMany(
-  language: ResolvedLanguage,
-  presetLabel: string,
-  visibleCount: number,
-  formatCount: (count: number) => string
-) {
-  switch (language) {
-    case "pt-BR":
-      return `${presetLabel} está ativo em ${formatCount(visibleCount)} janelas do mesmo aplicativo.`;
-    case "es":
-      return `${presetLabel} está activo en ${formatCount(visibleCount)} ventanas de la misma aplicación.`;
-    case "fr":
-      return `${presetLabel} est actif sur ${formatCount(visibleCount)} fenêtres de la même application.`;
-    case "zh-Hans":
-      return `${presetLabel} 已在同一应用的 ${formatCount(visibleCount)} 个窗口上启用。`;
-    case "hi":
-      return `${presetLabel} उसी ऐप की ${formatCount(visibleCount)} विंडो पर सक्रिय है।`;
-    case "ar":
-      return `${presetLabel} مفعّل على ${formatCount(visibleCount)} نوافذ من التطبيق نفسه.`;
-    case "bn":
-      return `${presetLabel} একই অ্যাপের ${formatCount(visibleCount)}টি উইন্ডোতে সক্রিয় আছে।`;
-    case "en":
-      return `${presetLabel} is active on ${formatCount(visibleCount)} windows from the same app.`;
-  }
-}
-
-function pendingOne(language: ResolvedLanguage, presetLabel: string, targetTitle: string | null) {
-  const title = targetTitle ?? fallbackTarget(language);
-  switch (language) {
-    case "pt-BR":
-      return `${presetLabel} aparecerá quando ${title} voltar à tela.`;
-    case "es":
-      return `${presetLabel} aparecerá cuando ${title} vuelva a la pantalla.`;
-    case "fr":
-      return `${presetLabel} apparaîtra lorsque ${title} reviendra à l'écran.`;
-    case "zh-Hans":
-      return `${presetLabel} 会在 ${title} 回到屏幕上时出现。`;
-    case "hi":
-      return `${title} के स्क्रीन पर लौटने पर ${presetLabel} दिखाई देगा।`;
-    case "ar":
-      return `سيظهر ${presetLabel} عندما تعود ${title} إلى الشاشة.`;
-    case "bn":
-      return `${title} স্ক্রিনে ফিরলে ${presetLabel} দেখা যাবে।`;
-    case "en":
-      return `${presetLabel} will appear when ${title} is back on screen.`;
-  }
-}
-
-function pendingMany(language: ResolvedLanguage, presetLabel: string) {
-  switch (language) {
-    case "pt-BR":
-      return `${presetLabel} aparecerá quando o aplicativo selecionado voltar à tela.`;
-    case "es":
-      return `${presetLabel} aparecerá cuando la aplicación seleccionada vuelva a la pantalla.`;
-    case "fr":
-      return `${presetLabel} apparaîtra lorsque l'application sélectionnée reviendra à l'écran.`;
-    case "zh-Hans":
-      return `${presetLabel} 会在所选应用回到屏幕上时出现。`;
-    case "hi":
-      return `चुना गया ऐप स्क्रीन पर लौटने पर ${presetLabel} दिखाई देगा।`;
-    case "ar":
-      return `سيظهر ${presetLabel} عندما يعود التطبيق المحدد إلى الشاشة.`;
-    case "bn":
-      return `নির্বাচিত অ্যাপটি স্ক্রিনে ফিরলে ${presetLabel} দেখা যাবে।`;
-    case "en":
-      return `${presetLabel} will appear when the selected app is back on screen.`;
-  }
-}
-
-function fallbackTarget(language: ResolvedLanguage) {
-  switch (language) {
-    case "pt-BR":
-      return "a janela selecionada";
-    case "es":
-      return "la ventana seleccionada";
-    case "fr":
-      return "la fenêtre sélectionnée";
-    case "zh-Hans":
-      return "所选窗口";
-    case "hi":
-      return "चुनी गई विंडो";
-    case "ar":
-      return "النافذة المحددة";
-    case "bn":
-      return "নির্বাচিত উইন্ডো";
-    case "en":
-      return "the selected window";
-  }
-}
-
-function getApplying(language: ResolvedLanguage) {
-  switch (language) {
-    case "pt-BR":
-    case "es":
-      return "Aplicando…";
-    case "fr":
-      return "Application…";
-    case "zh-Hans":
-      return "正在应用…";
-    case "hi":
-      return "लागू किया जा रहा है…";
-    case "ar":
-      return "جارٍ التطبيق…";
-    case "bn":
-      return "প্রয়োগ করা হচ্ছে…";
-    case "en":
-      return "Applying…";
+      return "Choose an effect and save it for an app.";
   }
 }
 
@@ -1140,23 +1052,460 @@ function getChooseEffect(language: ResolvedLanguage) {
   }
 }
 
-function getApplyPreset(language: ResolvedLanguage, presetLabel: string) {
+function getSavingProfile(language: ResolvedLanguage) {
   switch (language) {
     case "pt-BR":
+      return "Salvando…";
     case "es":
-      return `Aplicar ${presetLabel}`;
+      return "Guardando…";
     case "fr":
-      return `Appliquer ${presetLabel}`;
+      return "Enregistrement…";
     case "zh-Hans":
-      return `应用 ${presetLabel}`;
+      return "正在保存…";
     case "hi":
-      return `${presetLabel} लागू करें`;
+      return "सहेजा जा रहा है…";
     case "ar":
-      return `طبّق ${presetLabel}`;
+      return "جارٍ الحفظ…";
     case "bn":
-      return `${presetLabel} প্রয়োগ করুন`;
+      return "সংরক্ষণ করা হচ্ছে…";
     case "en":
-      return `Apply ${presetLabel}`;
+      return "Saving…";
+  }
+}
+
+function getSavePresetForApp(language: ResolvedLanguage, presetLabel: string) {
+  switch (language) {
+    case "pt-BR":
+      return `Salvar ${presetLabel} para este app`;
+    case "es":
+      return `Guardar ${presetLabel} para esta app`;
+    case "fr":
+      return `Enregistrer ${presetLabel} pour cette appli`;
+    case "zh-Hans":
+      return `为此应用保存 ${presetLabel}`;
+    case "hi":
+      return `इस ऐप के लिए ${presetLabel} सहेजें`;
+    case "ar":
+      return `احفظ ${presetLabel} لهذا التطبيق`;
+    case "bn":
+      return `এই অ্যাপের জন্য ${presetLabel} সংরক্ষণ করুন`;
+    case "en":
+      return `Save ${presetLabel} for this app`;
+  }
+}
+
+function getUpdateSavedApp(language: ResolvedLanguage, presetLabel: string) {
+  switch (language) {
+    case "pt-BR":
+      return `Atualizar para ${presetLabel}`;
+    case "es":
+      return `Actualizar a ${presetLabel}`;
+    case "fr":
+      return `Mettre à jour vers ${presetLabel}`;
+    case "zh-Hans":
+      return `更新为 ${presetLabel}`;
+    case "hi":
+      return `${presetLabel} में अपडेट करें`;
+    case "ar":
+      return `حدّث إلى ${presetLabel}`;
+    case "bn":
+      return `${presetLabel}-এ আপডেট করুন`;
+    case "en":
+      return `Update to ${presetLabel}`;
+  }
+}
+
+function getSaveProfileHintReady(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Salvar adiciona este app à lista de apps monitorados.";
+    case "es":
+      return "Guardar añade esta app a la lista de apps monitorizadas.";
+    case "fr":
+      return "Enregistrer ajoute cette appli à la liste des applis surveillées.";
+    case "zh-Hans":
+      return "保存后，此应用会加入持续监控列表。";
+    case "hi":
+      return "सहेजने पर यह ऐप निगरानी सूची में जुड़ जाएगा।";
+    case "ar":
+      return "سيؤدي الحفظ إلى إضافة هذا التطبيق إلى قائمة التطبيقات المراقبة.";
+    case "bn":
+      return "সংরক্ষণ করলে এই অ্যাপটি নজরদারি তালিকায় যোগ হবে।";
+    case "en":
+      return "Saving adds this app to the monitored list.";
+  }
+}
+
+function getSaveProfileHintMinimized(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Você pode salvar o app enquanto ele está minimizado. O efeito aparece quando a janela voltar.";
+    case "es":
+      return "Puedes guardar la app mientras está minimizada. El efecto aparece cuando la ventana vuelva.";
+    case "fr":
+      return "Vous pouvez enregistrer l'appli pendant qu'elle est réduite. L'effet apparaît quand la fenêtre revient.";
+    case "zh-Hans":
+      return "窗口最小化时也可以保存该应用，效果会在窗口恢复时出现。";
+    case "hi":
+      return "ऐप मिनिमाइज़ होने पर भी उसे सहेजा जा सकता है। विंडो लौटने पर प्रभाव दिखाई देगा।";
+    case "ar":
+      return "يمكنك حفظ التطبيق وهو مصغّر. سيظهر التأثير عندما تعود النافذة.";
+    case "bn":
+      return "অ্যাপটি মিনিমাইজ থাকা অবস্থায়ও সংরক্ষণ করা যায়। উইন্ডো ফিরলে ইফেক্ট দেখা যাবে।";
+    case "en":
+      return "You can save the app while it is minimized. The effect appears when the window returns.";
+  }
+}
+
+function getUpdateSavedAppHintReady(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Salvar novamente atualiza o efeito salvo para este app.";
+    case "es":
+      return "Guardar de nuevo actualiza el efecto guardado para esta app.";
+    case "fr":
+      return "Enregistrer à nouveau met à jour l'effet enregistré pour cette appli.";
+    case "zh-Hans":
+      return "再次保存会更新此应用已保存的效果。";
+    case "hi":
+      return "फिर से सहेजने पर इस ऐप के लिए सहेजा गया प्रभाव अपडेट होगा।";
+    case "ar":
+      return "سيؤدي الحفظ مرة أخرى إلى تحديث التأثير المحفوظ لهذا التطبيق.";
+    case "bn":
+      return "আবার সংরক্ষণ করলে এই অ্যাপের জন্য সংরক্ষিত ইফেক্টটি আপডেট হবে।";
+    case "en":
+      return "Saving again updates the saved effect for this app.";
+  }
+}
+
+function getUpdateSavedAppHintMinimized(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Você pode atualizar o efeito salvo enquanto o app está minimizado.";
+    case "es":
+      return "Puedes actualizar el efecto guardado mientras la app está minimizada.";
+    case "fr":
+      return "Vous pouvez mettre à jour l'effet enregistré pendant que l'appli est réduite.";
+    case "zh-Hans":
+      return "窗口最小化时也可以更新已保存的效果。";
+    case "hi":
+      return "ऐप मिनिमाइज़ होने पर भी सहेजा गया प्रभाव अपडेट किया जा सकता है।";
+    case "ar":
+      return "يمكنك تحديث التأثير المحفوظ بينما يكون التطبيق مصغّرًا.";
+    case "bn":
+      return "অ্যাপটি মিনিমাইজ থাকলেও সংরক্ষিত ইফেক্ট আপডেট করা যায়।";
+    case "en":
+      return "You can update the saved effect while the app is minimized.";
+  }
+}
+
+function getSavedApps(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Apps salvos";
+    case "es":
+      return "Apps guardadas";
+    case "fr":
+      return "Applis enregistrées";
+    case "zh-Hans":
+      return "已保存的应用";
+    case "hi":
+      return "सहेजे गए ऐप";
+    case "ar":
+      return "التطبيقات المحفوظة";
+    case "bn":
+      return "সংরক্ষিত অ্যাপ";
+    case "en":
+      return "Saved apps";
+  }
+}
+
+function getSavedAppsEmpty(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Salve um efeito para um app para mantê-lo ativo enquanto o Glare mute estiver em execução.";
+    case "es":
+      return "Guarda un efecto para una app y mantenlo activo mientras Glare mute siga en ejecución.";
+    case "fr":
+      return "Enregistrez un effet pour une appli afin de le garder actif pendant que Glare mute est en cours d'exécution.";
+    case "zh-Hans":
+      return "为某个应用保存效果后，只要 Glare mute 正在运行，它就会持续生效。";
+    case "hi":
+      return "किसी ऐप के लिए प्रभाव सहेजें ताकि Glare mute चलने तक वह सक्रिय रहे।";
+    case "ar":
+      return "احفظ تأثيرًا لتطبيق حتى يظل نشطًا ما دام Glare mute قيد التشغيل.";
+    case "bn":
+      return "কোনো অ্যাপের জন্য ইফেক্ট সংরক্ষণ করুন যাতে Glare mute চলমান থাকলে এটি সক্রিয় থাকে।";
+    case "en":
+      return "Save an effect for an app to keep it active while Glare mute is running.";
+  }
+}
+
+function getSavedAppsSubtitle(
+  language: ResolvedLanguage,
+  count: number,
+  formatCount: (count: number) => string
+) {
+  switch (language) {
+    case "pt-BR":
+      return `${formatCount(count)} apps salvos.`;
+    case "es":
+      return `${formatCount(count)} apps guardadas.`;
+    case "fr":
+      return `${formatCount(count)} applis enregistrées.`;
+    case "zh-Hans":
+      return `已保存 ${formatCount(count)} 个应用。`;
+    case "hi":
+      return `${formatCount(count)} ऐप सहेजे गए हैं।`;
+    case "ar":
+      return `تم حفظ ${formatCount(count)} تطبيقات.`;
+    case "bn":
+      return `${formatCount(count)}টি অ্যাপ সংরক্ষিত।`;
+    case "en":
+      return `${formatCount(count)} saved apps.`;
+  }
+}
+
+function getSavedProfileSummary(
+  language: ResolvedLanguage,
+  enabled: boolean,
+  matchCount: number,
+  visibleCount: number,
+  presetLabel: string,
+  formatCount: (count: number) => string
+) {
+  if (!enabled) {
+    switch (language) {
+      case "pt-BR":
+        return `${presetLabel} salvo, mas desativado.`;
+      case "es":
+        return `${presetLabel} guardado, pero desactivado.`;
+      case "fr":
+        return `${presetLabel} enregistré, mais désactivé.`;
+      case "zh-Hans":
+        return `${presetLabel} 已保存，但已关闭。`;
+      case "hi":
+        return `${presetLabel} सहेजा गया है, लेकिन बंद है।`;
+      case "ar":
+        return `${presetLabel} محفوظ، لكنه متوقف.`;
+      case "bn":
+        return `${presetLabel} সংরক্ষিত, কিন্তু বন্ধ।`;
+      case "en":
+        return `${presetLabel} is saved, but turned off.`;
+    }
+  }
+
+  if (matchCount === 0) {
+    switch (language) {
+      case "pt-BR":
+        return `${presetLabel} está aguardando uma janela correspondente.`;
+      case "es":
+        return `${presetLabel} está esperando una ventana coincidente.`;
+      case "fr":
+        return `${presetLabel} attend une fenêtre correspondante.`;
+      case "zh-Hans":
+        return `${presetLabel} 正在等待匹配的窗口。`;
+      case "hi":
+        return `${presetLabel} किसी मेल खाने वाली विंडो का इंतज़ार कर रहा है।`;
+      case "ar":
+        return `${presetLabel} ينتظر نافذة مطابقة.`;
+      case "bn":
+        return `${presetLabel} একটি মেলানো উইন্ডোর জন্য অপেক্ষা করছে।`;
+      case "en":
+        return `${presetLabel} is waiting for a matching window.`;
+    }
+  }
+
+  switch (language) {
+    case "pt-BR":
+      return `${presetLabel} está ativo em ${formatCount(Math.max(visibleCount, 1))} janelas.`;
+    case "es":
+      return `${presetLabel} está activo en ${formatCount(Math.max(visibleCount, 1))} ventanas.`;
+    case "fr":
+      return `${presetLabel} est actif sur ${formatCount(Math.max(visibleCount, 1))} fenêtres.`;
+    case "zh-Hans":
+      return `${presetLabel} 已在 ${formatCount(Math.max(visibleCount, 1))} 个窗口上启用。`;
+    case "hi":
+      return `${presetLabel} ${formatCount(Math.max(visibleCount, 1))} विंडो पर सक्रिय है।`;
+    case "ar":
+      return `${presetLabel} مفعّل على ${formatCount(Math.max(visibleCount, 1))} نوافذ.`;
+    case "bn":
+      return `${presetLabel} ${formatCount(Math.max(visibleCount, 1))}টি উইন্ডোতে সক্রিয় আছে।`;
+    case "en":
+      return `${presetLabel} is active on ${formatCount(Math.max(visibleCount, 1))} windows.`;
+  }
+}
+
+function pendingSavedApps(
+  language: ResolvedLanguage,
+  enabledProfileCount: number,
+  formatCount: (count: number) => string
+) {
+  switch (language) {
+    case "pt-BR":
+      return enabledProfileCount === 1
+        ? "Um app salvo está aguardando uma janela correspondente."
+        : `${formatCount(enabledProfileCount)} apps salvos estão aguardando janelas correspondentes.`;
+    case "es":
+      return enabledProfileCount === 1
+        ? "Una app guardada está esperando una ventana coincidente."
+        : `${formatCount(enabledProfileCount)} apps guardadas están esperando ventanas coincidentes.`;
+    case "fr":
+      return enabledProfileCount === 1
+        ? "Une appli enregistrée attend une fenêtre correspondante."
+        : `${formatCount(enabledProfileCount)} applis enregistrées attendent des fenêtres correspondantes.`;
+    case "zh-Hans":
+      return enabledProfileCount === 1
+        ? "一个已保存的应用正在等待匹配的窗口。"
+        : `${formatCount(enabledProfileCount)} 个已保存的应用正在等待匹配的窗口。`;
+    case "hi":
+      return enabledProfileCount === 1
+        ? "एक सहेजा गया ऐप किसी मेल खाने वाली विंडो का इंतज़ार कर रहा है।"
+        : `${formatCount(enabledProfileCount)} सहेजे गए ऐप मेल खाने वाली विंडो का इंतज़ार कर रहे हैं।`;
+    case "ar":
+      return enabledProfileCount === 1
+        ? "يوجد تطبيق محفوظ ينتظر نافذة مطابقة."
+        : `توجد ${formatCount(enabledProfileCount)} تطبيقات محفوظة تنتظر نوافذ مطابقة.`;
+    case "bn":
+      return enabledProfileCount === 1
+        ? "একটি সংরক্ষিত অ্যাপ একটি মেলানো উইন্ডোর জন্য অপেক্ষা করছে।"
+        : `${formatCount(enabledProfileCount)}টি সংরক্ষিত অ্যাপ মেলানো উইন্ডোর জন্য অপেক্ষা করছে।`;
+    case "en":
+      return enabledProfileCount === 1
+        ? "One saved app is waiting for a matching window."
+        : `${formatCount(enabledProfileCount)} saved apps are waiting for matching windows.`;
+  }
+}
+
+function activeSavedApps(
+  language: ResolvedLanguage,
+  visibleCount: number,
+  coveredCount: number,
+  enabledProfileCount: number,
+  formatCount: (count: number) => string
+) {
+  switch (language) {
+    case "pt-BR":
+      return `Os efeitos estão ativos em ${formatCount(visibleCount)} janelas de ${formatCount(Math.min(enabledProfileCount, coveredCount))} apps salvos.`;
+    case "es":
+      return `Los efectos están activos en ${formatCount(visibleCount)} ventanas de ${formatCount(Math.min(enabledProfileCount, coveredCount))} apps guardadas.`;
+    case "fr":
+      return `Les effets sont actifs sur ${formatCount(visibleCount)} fenêtres provenant de ${formatCount(Math.min(enabledProfileCount, coveredCount))} applis enregistrées.`;
+    case "zh-Hans":
+      return `效果已在 ${formatCount(visibleCount)} 个窗口上启用，来自 ${formatCount(Math.min(enabledProfileCount, coveredCount))} 个已保存的应用。`;
+    case "hi":
+      return `प्रभाव ${formatCount(visibleCount)} विंडो पर सक्रिय हैं, जो ${formatCount(Math.min(enabledProfileCount, coveredCount))} सहेजे गए ऐप से हैं।`;
+    case "ar":
+      return `التأثيرات مفعّلة على ${formatCount(visibleCount)} نوافذ من ${formatCount(Math.min(enabledProfileCount, coveredCount))} تطبيقات محفوظة.`;
+    case "bn":
+      return `ইফেক্ট ${formatCount(visibleCount)}টি উইন্ডোতে সক্রিয়, যা ${formatCount(Math.min(enabledProfileCount, coveredCount))}টি সংরক্ষিত অ্যাপ থেকে এসেছে।`;
+    case "en":
+      return `Effects are active on ${formatCount(visibleCount)} windows from ${formatCount(Math.min(enabledProfileCount, coveredCount))} saved apps.`;
+  }
+}
+
+function getOn(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Ligado";
+    case "es":
+      return "Encendido";
+    case "fr":
+      return "Activé";
+    case "zh-Hans":
+      return "开启";
+    case "hi":
+      return "चालू";
+    case "ar":
+      return "قيد التشغيل";
+    case "bn":
+      return "চালু";
+    case "en":
+      return "On";
+  }
+}
+
+function getRemove(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Remover";
+    case "es":
+      return "Eliminar";
+    case "fr":
+      return "Supprimer";
+    case "zh-Hans":
+      return "移除";
+    case "hi":
+      return "हटाएँ";
+    case "ar":
+      return "إزالة";
+    case "bn":
+      return "অপসারণ";
+    case "en":
+      return "Remove";
+  }
+}
+
+function getEnable(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Ativar";
+    case "es":
+      return "Activar";
+    case "fr":
+      return "Activer";
+    case "zh-Hans":
+      return "启用";
+    case "hi":
+      return "चालू करें";
+    case "ar":
+      return "تفعيل";
+    case "bn":
+      return "চালু করুন";
+    case "en":
+      return "Enable";
+  }
+}
+
+function getDisable(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Desativar";
+    case "es":
+      return "Desactivar";
+    case "fr":
+      return "Désactiver";
+    case "zh-Hans":
+      return "停用";
+    case "hi":
+      return "बंद करें";
+    case "ar":
+      return "تعطيل";
+    case "bn":
+      return "বন্ধ করুন";
+    case "en":
+      return "Disable";
+  }
+}
+
+function getSaveForApp(language: ResolvedLanguage) {
+  switch (language) {
+    case "pt-BR":
+      return "Salvar para o app";
+    case "es":
+      return "Guardar para la app";
+    case "fr":
+      return "Enregistrer pour l'appli";
+    case "zh-Hans":
+      return "为应用保存";
+    case "hi":
+      return "ऐप के लिए सहेजें";
+    case "ar":
+      return "احفظ للتطبيق";
+    case "bn":
+      return "অ্যাপের জন্য সংরক্ষণ করুন";
+    case "en":
+      return "Save for app";
   }
 }
 
@@ -1178,47 +1527,5 @@ function getSelectWindowToContinue(language: ResolvedLanguage) {
       return "চালিয়ে যেতে একটি উইন্ডো বেছে নিন।";
     case "en":
       return "Select a window to continue.";
-  }
-}
-
-function getApplyHintMinimized(language: ResolvedLanguage) {
-  switch (language) {
-    case "pt-BR":
-      return "Esta janela está minimizada. O efeito aparecerá quando ela voltar à tela.";
-    case "es":
-      return "Esta ventana está minimizada. El efecto aparecerá cuando vuelva a la pantalla.";
-    case "fr":
-      return "Cette fenêtre est réduite. L'effet apparaîtra lorsqu'elle reviendra à l'écran.";
-    case "zh-Hans":
-      return "此窗口已最小化。回到屏幕上时会显示效果。";
-    case "hi":
-      return "यह विंडो मिनिमाइज़्ड है। स्क्रीन पर लौटने पर प्रभाव दिखाई देगा।";
-    case "ar":
-      return "هذه النافذة مصغّرة. سيظهر التأثير عندما تعود إلى الشاشة.";
-    case "bn":
-      return "এই উইন্ডোটি মিনিমাইজ করা আছে। স্ক্রিনে ফিরলে ইফেক্ট দেখা যাবে।";
-    case "en":
-      return "This window is minimized. The effect will appear when it is back on screen.";
-  }
-}
-
-function getApplyHintReady(language: ResolvedLanguage) {
-  switch (language) {
-    case "pt-BR":
-      return "Pronto para aplicar o efeito selecionado a esta janela.";
-    case "es":
-      return "Listo para aplicar el efecto seleccionado a esta ventana.";
-    case "fr":
-      return "Prêt à appliquer l'effet sélectionné à cette fenêtre.";
-    case "zh-Hans":
-      return "已准备好将所选效果应用到此窗口。";
-    case "hi":
-      return "इस विंडो पर चुना गया प्रभाव लागू करने के लिए तैयार।";
-    case "ar":
-      return "جاهز لتطبيق التأثير المحدد على هذه النافذة.";
-    case "bn":
-      return "এই উইন্ডোতে নির্বাচিত ইফেক্ট প্রয়োগ করার জন্য প্রস্তুত।";
-    case "en":
-      return "Ready to apply the selected effect to this window.";
   }
 }

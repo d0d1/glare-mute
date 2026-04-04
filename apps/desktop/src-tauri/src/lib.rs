@@ -35,15 +35,16 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            commands::attach_window,
             commands::append_frontend_log,
             commands::bootstrap_state,
-            commands::detach_lens,
             commands::get_debug_report,
             commands::open_logs_directory,
             commands::refresh_window_candidates,
+            commands::remove_profile,
+            commands::save_profile_from_window,
             commands::set_apply_to_related_windows,
             commands::set_language,
+            commands::set_profile_enabled,
             commands::set_theme_preference
         ])
         .run(tauri::generate_context!())

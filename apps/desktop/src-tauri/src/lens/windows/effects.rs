@@ -20,14 +20,6 @@ pub(super) fn effect_for_preset(preset: VisualPreset) -> Result<MAGCOLOREFFECT> 
     }
 }
 
-pub(super) fn preset_label(preset: Option<VisualPreset>) -> &'static str {
-    match preset.unwrap_or(VisualPreset::Invert) {
-        VisualPreset::Invert => "Invert",
-        VisualPreset::WarmDim => "Warm Dim",
-        VisualPreset::GreyscaleInvert => "Greyscale Invert",
-    }
-}
-
 fn greyscale_invert_effect() -> MAGCOLOREFFECT {
     MAGCOLOREFFECT {
         transform: [

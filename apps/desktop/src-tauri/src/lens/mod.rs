@@ -1,5 +1,5 @@
 use anyhow::Result;
-use glare_mute_core::{LensSnapshot, VisualPreset, WindowDescriptor};
+use glare_mute_core::{LensSnapshot, ProfileRule, WindowDescriptor};
 
 #[cfg(not(target_os = "windows"))]
 mod preview;
@@ -22,12 +22,8 @@ impl LensController {
         })
     }
 
-    pub fn attach_window(&self, window_id: &str, preset: VisualPreset) -> Result<LensSnapshot> {
-        self.inner.attach_window(window_id, preset)
-    }
-
-    pub fn detach(&self) -> Result<LensSnapshot> {
-        self.inner.detach()
+    pub fn set_profiles(&self, profiles: Vec<ProfileRule>) -> Result<LensSnapshot> {
+        self.inner.set_profiles(profiles)
     }
 
     pub fn list_windows(&self) -> Result<Vec<WindowDescriptor>> {

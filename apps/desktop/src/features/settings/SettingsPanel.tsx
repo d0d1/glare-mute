@@ -2,7 +2,7 @@ import { ChoiceField, type ChoiceOption } from "../../components/ChoiceField";
 import type { AppLanguage, ThemePreference } from "../../lib/contracts";
 import type { Messages } from "../../lib/i18n";
 
-type BusyAction = "apply" | "copy" | "logs" | "settings" | "turnOff" | null;
+type BusyAction = "saveProfile" | "profiles" | "copy" | "logs" | "settings" | null;
 
 export function SettingsPanel({
   busyAction,

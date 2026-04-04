@@ -19,19 +19,35 @@ pub fn refresh_window_candidates(state: State<'_, ManagedState>) -> Result<AppSn
 }
 
 #[tauri::command]
-pub fn attach_window(
+pub fn save_profile_from_window(
     state: State<'_, ManagedState>,
     window_id: String,
     preset: VisualPreset,
 ) -> Result<AppSnapshot, String> {
     state
-        .attach_window(&window_id, preset)
+        .save_profile_from_window(&window_id, preset)
         .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn detach_lens(state: State<'_, ManagedState>) -> Result<AppSnapshot, String> {
-    state.detach_lens().map_err(|error| error.to_string())
+pub fn remove_profile(
+    state: State<'_, ManagedState>,
+    profile_id: String,
+) -> Result<AppSnapshot, String> {
+    state
+        .remove_profile(&profile_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_profile_enabled(
+    state: State<'_, ManagedState>,
+    profile_id: String,
+    enabled: bool,
+) -> Result<AppSnapshot, String> {
+    state
+        .set_profile_enabled(&profile_id, enabled)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

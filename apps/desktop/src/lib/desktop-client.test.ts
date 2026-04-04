@@ -30,18 +30,22 @@ describe("desktopClient mock runtime", () => {
     expect(nextSnapshot.settings.themePreference).toBe("light");
   });
 
-  it("attaches the mock greyscale lens to a listed window", async () => {
+  it("saves a mock effect for a listed app", async () => {
     const snapshot = await desktopClient.bootstrapState();
     const candidate = snapshot.windowCandidates[0];
-    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "greyscaleInvert");
+    const nextSnapshot = await desktopClient.saveProfileFromWindow(
+      candidate.logicalTargetId,
+      "greyscaleInvert"
+    );
 
-    expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
-    expect(nextSnapshot.lens.activePreset).toBe("greyscaleInvert");
+    expect(nextSnapshot.settings.profiles).toHaveLength(1);
+    expect(nextSnapshot.settings.profiles[0]?.preset).toBe("greyscaleInvert");
     expect(nextSnapshot.lens.status).toBe("attached");
+    expect(nextSnapshot.lens.profileSnapshots).toHaveLength(1);
     expect(nextSnapshot.lens.coveredTargets.length).toBeGreaterThan(1);
   });
 
-  it("keeps minimized windows in the list and applies pending output until they return", async () => {
+  it("keeps minimized windows in the list and marks saved output pending until they return", async () => {
     const snapshot = await desktopClient.bootstrapState();
     const candidate = snapshot.windowCandidates.find(
       (entry: WindowDescriptor) => entry.attachmentState === "minimized"
@@ -52,23 +56,66 @@ describe("desktopClient mock runtime", () => {
       throw new Error("Expected a minimized mock window.");
     }
 
-    const nextSnapshot = await desktopClient.attachWindow(candidate.windowId, "invert");
+    const nextSnapshot = await desktopClient.saveProfileFromWindow(
+      candidate.logicalTargetId,
+      "invert"
+    );
 
-    expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
-    expect(nextSnapshot.lens.activePreset).toBe("invert");
     expect(nextSnapshot.lens.status).toBe("pending");
   });
 
-  it("can disable related-window coverage while keeping the current target", async () => {
+  it("can disable related-window coverage while keeping the saved app", async () => {
     const snapshot = await desktopClient.bootstrapState();
     const candidate = snapshot.windowCandidates[0];
 
-    await desktopClient.attachWindow(candidate.windowId, "greyscaleInvert");
+    await desktopClient.saveProfileFromWindow(candidate.logicalTargetId, "greyscaleInvert");
     const nextSnapshot = await desktopClient.setApplyToRelatedWindows(false);
 
     expect(nextSnapshot.settings.applyToRelatedWindows).toBe(false);
-    expect(nextSnapshot.lens.activeTarget?.windowId).toBe(candidate.windowId);
     expect(nextSnapshot.lens.coveredTargets).toHaveLength(1);
+  });
+
+  it("can disable and re-enable a saved app", async () => {
+    const snapshot = await desktopClient.bootstrapState();
+    const candidate = snapshot.windowCandidates[0];
+
+    const savedSnapshot = await desktopClient.saveProfileFromWindow(
+      candidate.logicalTargetId,
+      "invert"
+    );
+    const profileId = savedSnapshot.settings.profiles[0]?.id;
+    expect(profileId).toBeDefined();
+    if (!profileId) {
+      throw new Error("Expected a saved profile id.");
+    }
+
+    const disabledSnapshot = await desktopClient.setProfileEnabled(profileId, false);
+    expect(disabledSnapshot.settings.profiles[0]?.enabled).toBe(false);
+    expect(disabledSnapshot.lens.status).toBe("detached");
+
+    const enabledSnapshot = await desktopClient.setProfileEnabled(profileId, true);
+    expect(enabledSnapshot.settings.profiles[0]?.enabled).toBe(true);
+    expect(enabledSnapshot.lens.status).toBe("attached");
+  });
+
+  it("can remove a saved app", async () => {
+    const snapshot = await desktopClient.bootstrapState();
+    const candidate = snapshot.windowCandidates[0];
+
+    const savedSnapshot = await desktopClient.saveProfileFromWindow(
+      candidate.logicalTargetId,
+      "invert"
+    );
+    const profileId = savedSnapshot.settings.profiles[0]?.id;
+    expect(profileId).toBeDefined();
+    if (!profileId) {
+      throw new Error("Expected a saved profile id.");
+    }
+
+    const nextSnapshot = await desktopClient.removeProfile(profileId);
+    expect(nextSnapshot.settings.profiles).toHaveLength(0);
+    expect(nextSnapshot.lens.profileSnapshots).toHaveLength(0);
+    expect(nextSnapshot.lens.status).toBe("detached");
   });
 
   it("refreshes the mock window list", async () => {

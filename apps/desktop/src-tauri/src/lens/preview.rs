@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use anyhow::{Result, bail};
-use glare_mute_core::{LensSnapshot, LensStatus, VisualPreset, WindowDescriptor};
+use glare_mute_core::{LensSnapshot, LensStatus, ProfileRule, WindowDescriptor};
 
 pub(super) struct LensControllerImpl {
     snapshot: Mutex<LensSnapshot>,
@@ -16,29 +16,16 @@ impl LensControllerImpl {
                 } else {
                     LensStatus::Detached
                 },
-                active_preset: None,
-                active_target: None,
                 covered_targets: Vec::new(),
+                profile_snapshots: Vec::new(),
                 summary: "Native window effects only run in the Windows desktop shell.".to_string(),
                 backend_label: "Preview backend".to_string(),
             }),
         })
     }
 
-    pub(super) fn attach_window(
-        &self,
-        _window_id: &str,
-        _preset: VisualPreset,
-    ) -> Result<LensSnapshot> {
+    pub(super) fn set_profiles(&self, _profiles: Vec<ProfileRule>) -> Result<LensSnapshot> {
         bail!("Native window effects only run in the Windows desktop shell.")
-    }
-
-    pub(super) fn detach(&self) -> Result<LensSnapshot> {
-        Ok(self
-            .snapshot
-            .lock()
-            .expect("preview lens lock poisoned")
-            .clone())
     }
 
     pub(super) fn list_windows(&self) -> Result<Vec<WindowDescriptor>> {

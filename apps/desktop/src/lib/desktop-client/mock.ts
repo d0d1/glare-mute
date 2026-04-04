@@ -1,45 +1,17 @@
-import type { AppLanguage, AppSnapshot, ThemePreference, WindowDescriptor } from "../contracts";
+import type {
+  AppLanguage,
+  AppSnapshot,
+  ProfileRule,
+  ThemePreference,
+  VisualPreset,
+  WindowDescriptor,
+} from "../contracts";
 import { defaultWindowCandidates } from "./mock-data";
 import { readSnapshot, writeSnapshot } from "./mock-snapshot";
 import type { DesktopClient } from "./types";
 
 export function createMockDesktopClient(): DesktopClient {
   return {
-    async attachWindow(windowId, preset) {
-      const snapshot = readSnapshot();
-      const candidate = snapshot.windowCandidates.find((entry) => entry.windowId === windowId);
-
-      if (!candidate) {
-        throw new Error(`No mock window found for ${windowId}.`);
-      }
-      if (!["greyscaleInvert", "invert"].includes(preset)) {
-        throw new Error(`${preset} is not available in the current build.`);
-      }
-
-      const coveredTargets = relatedWindowTargets(snapshot, candidate);
-      const status = mockLensStatus(coveredTargets);
-      snapshot.lens = {
-        activePreset: preset,
-        activeTarget: candidate,
-        coveredTargets,
-        backendLabel: "Mock transform backend",
-        status,
-        summary: mockLensSummary(preset, candidate, coveredTargets, status),
-      };
-      snapshot.diagnostics.recentEvents.unshift({
-        timestamp: new Date().toISOString(),
-        level: "info",
-        source: "mock-runtime",
-        message:
-          status === "pending"
-            ? `applied ${preset} to ${candidate.title}; it will appear once the window is back on screen`
-            : snapshot.settings.applyToRelatedWindows && coveredTargets.length > 1
-              ? `applied ${preset} to ${coveredTargets.length} windows from the same app`
-              : `applied ${preset} to ${candidate.title}`,
-      });
-      writeSnapshot(snapshot);
-      return snapshot;
-    },
     async appendFrontendLog(level, source, message) {
       const snapshot = readSnapshot();
       snapshot.diagnostics.recentEvents.unshift({
@@ -60,27 +32,9 @@ export function createMockDesktopClient(): DesktopClient {
           source: "mock-runtime",
           message: "browser preview booted with the shared desktop contract",
         });
-        writeSnapshot(snapshot);
       }
 
-      return snapshot;
-    },
-    async detachLens() {
-      const snapshot = readSnapshot();
-      snapshot.lens = {
-        activePreset: null,
-        activeTarget: null,
-        coveredTargets: [],
-        backendLabel: "Mock transform backend",
-        status: "detached",
-        summary: "No effect is active in the browser preview.",
-      };
-      snapshot.diagnostics.recentEvents.unshift({
-        timestamp: new Date().toISOString(),
-        level: "info",
-        source: "mock-runtime",
-        message: "turned off the current mock effect",
-      });
+      recomputeLens(snapshot);
       writeSnapshot(snapshot);
       return snapshot;
     },
@@ -100,62 +54,65 @@ export function createMockDesktopClient(): DesktopClient {
     async refreshWindowCandidates() {
       const snapshot = readSnapshot();
       snapshot.windowCandidates = defaultWindowCandidates();
-      if (snapshot.lens.activeTarget) {
-        const nextTarget =
-          snapshot.windowCandidates.find(
-            (entry) => entry.windowId === snapshot.lens.activeTarget?.windowId
-          ) ??
-          snapshot.windowCandidates.find(
-            (entry) => entry.processId === snapshot.lens.activeTarget?.processId
-          ) ??
-          null;
-        snapshot.lens.activeTarget = nextTarget;
-        if (nextTarget) {
-          const coveredTargets = relatedWindowTargets(snapshot, nextTarget);
-          const status = mockLensStatus(coveredTargets);
-          snapshot.lens.coveredTargets = coveredTargets;
-          snapshot.lens.status = status;
-          snapshot.lens.summary = mockLensSummary(
-            snapshot.lens.activePreset ?? "invert",
-            nextTarget,
-            coveredTargets,
-            status
-          );
-        } else {
-          snapshot.lens = {
-            activePreset: null,
-            activeTarget: null,
-            coveredTargets: [],
-            backendLabel: snapshot.lens.backendLabel,
-            status: "detached",
-            summary: "No effect is active in the browser preview.",
-          };
-        }
+      recomputeLens(snapshot);
+      writeSnapshot(snapshot);
+      return snapshot;
+    },
+    async removeProfile(profileId) {
+      const snapshot = readSnapshot();
+      const index = snapshot.settings.profiles.findIndex((profile) => profile.id === profileId);
+      if (index === -1) {
+        throw new Error(`No saved app found for ${profileId}.`);
       }
+
+      const [removed] = snapshot.settings.profiles.splice(index, 1);
+      recomputeLens(snapshot);
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "mock-runtime",
+        message: `removed saved app ${removed.label || removed.executablePath}`,
+      });
+      writeSnapshot(snapshot);
+      return snapshot;
+    },
+    async saveProfileFromWindow(windowId, preset) {
+      const snapshot = readSnapshot();
+      const candidate = snapshot.windowCandidates.find(
+        (entry) => entry.logicalTargetId === windowId || entry.windowId === windowId
+      );
+
+      if (!candidate) {
+        throw new Error(`No mock window found for ${windowId}.`);
+      }
+      if (!["greyscaleInvert", "invert"].includes(preset)) {
+        throw new Error(`${preset} is not available in the current build.`);
+      }
+      if (!candidate.executablePath) {
+        throw new Error("The selected mock window does not expose an executable path.");
+      }
+
+      upsertProfile(snapshot.settings.profiles, candidate, preset);
+      recomputeLens(snapshot);
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "mock-runtime",
+        message: `saved ${preset} for ${profileLabelForWindow(candidate)}`,
+      });
       writeSnapshot(snapshot);
       return snapshot;
     },
     async setApplyToRelatedWindows(enabled) {
       const snapshot = readSnapshot();
       snapshot.settings.applyToRelatedWindows = enabled;
+      recomputeLens(snapshot);
       snapshot.diagnostics.recentEvents.unshift({
         timestamp: new Date().toISOString(),
         level: "info",
         source: "mock-runtime",
         message: enabled ? "related window coverage enabled" : "related window coverage disabled",
       });
-      if (snapshot.lens.activeTarget) {
-        const coveredTargets = relatedWindowTargets(snapshot, snapshot.lens.activeTarget);
-        const status = mockLensStatus(coveredTargets);
-        snapshot.lens.coveredTargets = coveredTargets;
-        snapshot.lens.status = status;
-        snapshot.lens.summary = mockLensSummary(
-          snapshot.lens.activePreset ?? "invert",
-          snapshot.lens.activeTarget,
-          coveredTargets,
-          status
-        );
-      }
       writeSnapshot(snapshot);
       return snapshot;
     },
@@ -167,6 +124,26 @@ export function createMockDesktopClient(): DesktopClient {
         level: "info",
         source: "mock-runtime",
         message: `language updated to ${language}`,
+      });
+      writeSnapshot(snapshot);
+      return snapshot;
+    },
+    async setProfileEnabled(profileId: string, enabled: boolean) {
+      const snapshot = readSnapshot();
+      const profile = snapshot.settings.profiles.find((entry) => entry.id === profileId);
+      if (!profile) {
+        throw new Error(`No saved app found for ${profileId}.`);
+      }
+
+      profile.enabled = enabled;
+      recomputeLens(snapshot);
+      snapshot.diagnostics.recentEvents.unshift({
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "mock-runtime",
+        message: enabled
+          ? `enabled saved app ${profile.label || profile.executablePath}`
+          : `disabled saved app ${profile.label || profile.executablePath}`,
       });
       writeSnapshot(snapshot);
       return snapshot;
@@ -186,52 +163,150 @@ export function createMockDesktopClient(): DesktopClient {
   };
 }
 
-function mockLensSummary(
-  preset: AppSnapshot["lens"]["activePreset"] extends infer T ? Exclude<T, null> : never,
-  activeTarget: AppSnapshot["lens"]["activeTarget"],
-  coveredTargets: AppSnapshot["lens"]["coveredTargets"],
-  status: AppSnapshot["lens"]["status"]
-) {
-  const label =
-    preset === "invert" ? "Invert" : preset === "warmDim" ? "Warm Dim" : "Greyscale Invert";
+function recomputeLens(snapshot: AppSnapshot) {
+  const profileSnapshots = snapshot.settings.profiles.map((profile) => {
+    const matchingTargets = profile.enabled
+      ? resolveProfileTargets(
+          snapshot.windowCandidates,
+          profile,
+          snapshot.settings.applyToRelatedWindows
+        )
+      : [];
+
+    return {
+      profileId: profile.id,
+      label: profile.label || fallbackProfileLabel(profile),
+      enabled: profile.enabled,
+      preset: profile.preset,
+      matchingTargets,
+    };
+  });
+
+  const coveredTargets = dedupeLogicalTargets(
+    profileSnapshots.flatMap((profile) => profile.matchingTargets)
+  );
   const visibleCount = coveredTargets.filter(
     (target) => target.attachmentState === "available"
   ).length;
-  const coveredCount = coveredTargets.length;
+  const enabledProfiles = snapshot.settings.profiles.filter((profile) => profile.enabled).length;
 
-  switch (status) {
-    case "pending":
-      return coveredCount > 1
-        ? `${label} will appear when the selected app is back on screen.`
-        : `${label} will appear when ${activeTarget?.title ?? "the selected window"} is back on screen.`;
-    case "attached":
-      return coveredCount > 1
-        ? `${label} is active on ${Math.max(visibleCount, 1)} windows from the same app.`
-        : `${label} is active on ${activeTarget?.title ?? "the selected window"}.`;
-    case "suspended":
-      return "The current effect is paused in the browser preview.";
-    case "detached":
-      return "No effect is active in the browser preview.";
-  }
+  snapshot.lens = {
+    coveredTargets,
+    profileSnapshots,
+    backendLabel: "Mock transform backend",
+    status: enabledProfiles === 0 ? "detached" : visibleCount > 0 ? "attached" : "pending",
+    summary:
+      enabledProfiles === 0
+        ? "No saved apps are active in the browser preview."
+        : visibleCount > 0
+          ? `Effects are active on ${Math.max(visibleCount, 1)} windows across ${enabledProfiles} saved apps.`
+          : enabledProfiles === 1
+            ? "A saved effect is waiting for a matching window."
+            : `${enabledProfiles} saved effects are waiting for matching windows.`,
+  };
 }
 
-function mockLensStatus(
-  coveredTargets: AppSnapshot["lens"]["coveredTargets"]
-): AppSnapshot["lens"]["status"] {
-  if (coveredTargets.length === 0) {
-    return "detached";
+function resolveProfileTargets(
+  candidates: AppSnapshot["windowCandidates"],
+  profile: ProfileRule,
+  applyToRelatedWindows: boolean
+) {
+  const directMatches = candidates.filter((candidate) =>
+    profileMatchesCandidate(profile, candidate)
+  );
+  if (!applyToRelatedWindows) {
+    return directMatches;
   }
 
-  return coveredTargets.some((target) => target.attachmentState === "available")
-    ? "attached"
-    : "pending";
+  const processIds = new Set(directMatches.map((candidate) => candidate.processId));
+  return dedupeLogicalTargets(
+    candidates.filter(
+      (candidate) =>
+        processIds.has(candidate.processId) || profileMatchesCandidate(profile, candidate)
+    )
+  );
 }
 
-function relatedWindowTargets(
-  snapshot: AppSnapshot,
-  candidate: WindowDescriptor
-): AppSnapshot["lens"]["coveredTargets"] {
-  return snapshot.settings.applyToRelatedWindows
-    ? snapshot.windowCandidates.filter((entry) => entry.processId === candidate.processId)
-    : [candidate];
+function profileMatchesCandidate(profile: ProfileRule, candidate: WindowDescriptor) {
+  if (!candidate.executablePath) {
+    return false;
+  }
+  if (candidate.executablePath.toLowerCase() !== profile.executablePath.toLowerCase()) {
+    return false;
+  }
+  if (
+    profile.windowClass &&
+    (candidate.windowClass ?? "").toLowerCase() !== profile.windowClass.toLowerCase()
+  ) {
+    return false;
+  }
+  if (profile.titlePattern) {
+    const normalizedPattern = profile.titlePattern.trim().toLowerCase();
+    if (normalizedPattern && !candidate.title.toLowerCase().includes(normalizedPattern)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function dedupeLogicalTargets(targets: WindowDescriptor[]) {
+  const seen = new Set<string>();
+  return targets.filter((target) => {
+    if (seen.has(target.logicalTargetId)) {
+      return false;
+    }
+
+    seen.add(target.logicalTargetId);
+    return true;
+  });
+}
+
+function upsertProfile(profiles: ProfileRule[], candidate: WindowDescriptor, preset: VisualPreset) {
+  const executablePath = candidate.executablePath;
+  if (!executablePath) {
+    return;
+  }
+
+  const existing = profiles.find(
+    (profile) =>
+      profile.executablePath.toLowerCase() === executablePath.toLowerCase() &&
+      profile.titlePattern === null &&
+      profile.windowClass === (candidate.windowClass ?? null)
+  );
+  if (existing) {
+    existing.enabled = true;
+    existing.preset = preset;
+    existing.label = profileLabelForWindow(candidate);
+    return;
+  }
+
+  profiles.push({
+    id: `profile-${Date.now()}-${profiles.length + 1}`,
+    enabled: true,
+    label: profileLabelForWindow(candidate),
+    executablePath,
+    preset,
+    titlePattern: null,
+    windowClass: candidate.windowClass ?? null,
+    notes: null,
+  });
+}
+
+function profileLabelForWindow(candidate: WindowDescriptor) {
+  return executableName(candidate.executablePath) ?? candidate.title;
+}
+
+function fallbackProfileLabel(profile: ProfileRule) {
+  return executableName(profile.executablePath) ?? profile.executablePath;
+}
+
+function executableName(path: string | null) {
+  if (!path) {
+    return null;
+  }
+
+  const segments = path.split(/[/\\]/);
+  const fileName = segments.at(-1) ?? path;
+  return fileName.replace(/\.exe$/i, "");
 }

@@ -3,7 +3,7 @@ import type { AppSnapshot } from "../../lib/contracts";
 import type { Messages } from "../../lib/i18n";
 import { LogItem } from "./LogItem";
 
-type BusyAction = "apply" | "copy" | "logs" | "settings" | "turnOff" | null;
+type BusyAction = "saveProfile" | "profiles" | "copy" | "logs" | "settings" | null;
 
 export function SupportPanel({
   busyAction,

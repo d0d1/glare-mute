@@ -25,6 +25,8 @@ export interface Messages {
   copyDebugReportFailure: string;
   copied: string;
   copying: string;
+  disable: string;
+  enable: string;
   effect: string;
   effectHintDetached: string;
   executablePath: string;
@@ -39,6 +41,7 @@ export interface Messages {
   noWindowsAvailable: string;
   noWindowsMatch: string;
   off: string;
+  on: string;
   openLogs: string;
   openLogsFailure: string;
   openProductFailure: string;
@@ -50,9 +53,13 @@ export interface Messages {
   recentEventsSubtitle: string;
   relatedWindows: string;
   relatedWindowsDescription: string;
+  remove: string;
   runtime: string;
   runtimeSubtitle: string;
   selectWindowToContinue: string;
+  saveForApp: string;
+  savedApps: string;
+  savedAppsEmpty: string;
   selectedWindow: string;
   selectedWindowEmpty: string;
   settings: string;
@@ -73,20 +80,30 @@ export interface Messages {
   windowsShown: (count: number) => string;
   effectSummary: (args: {
     coveredCount: number;
-    presetLabel: string;
+    enabledProfileCount: number;
     status: LensStatus;
-    targetTitle: string | null;
     visibleCount: number;
   }) => string;
-  applyButton: (args: {
+  saveProfileButton: (args: {
     busy: boolean;
     hasPreset: boolean;
+    hasSavedProfile: boolean;
     hasSelectedWindow: boolean;
     presetLabel: string | null;
   }) => string;
-  applyHint: (attachmentState: WindowAttachmentState | null) => string;
+  saveProfileHint: (args: {
+    attachmentState: WindowAttachmentState | null;
+    hasSavedProfile: boolean;
+  }) => string;
   presetLabel: (preset: VisualPreset) => string;
   presetSummary: (preset: VisualPreset) => string;
+  savedAppsSubtitle: (count: number) => string;
+  savedProfileSummary: (args: {
+    enabled: boolean;
+    matchCount: number;
+    presetLabel: string;
+    visibleCount: number;
+  }) => string;
   themeLabel: (theme: ThemePreference) => string;
   windowEffectLabel: (status: LensStatus) => string;
   windowState: (state: WindowAttachmentState) => string;

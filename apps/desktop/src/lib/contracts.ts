@@ -22,6 +22,9 @@ export interface CapabilityDescriptor {
 }
 
 export interface ProfileRule {
+  id: string;
+  enabled: boolean;
+  label: string;
   executablePath: string;
   preset: VisualPreset;
   titlePattern: string | null;
@@ -80,11 +83,18 @@ export interface WindowDescriptor {
   isForeground: boolean;
 }
 
+export interface ProfileSnapshot {
+  profileId: string;
+  label: string;
+  enabled: boolean;
+  preset: VisualPreset;
+  matchingTargets: WindowDescriptor[];
+}
+
 export interface LensSnapshot {
   status: LensStatus;
-  activePreset: VisualPreset | null;
-  activeTarget: WindowDescriptor | null;
   coveredTargets: WindowDescriptor[];
+  profileSnapshots: ProfileSnapshot[];
   summary: string;
   backendLabel: string;
 }

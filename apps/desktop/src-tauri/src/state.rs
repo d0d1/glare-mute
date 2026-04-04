@@ -1,13 +1,13 @@
 use std::collections::VecDeque;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use glare_mute_core::{
-    APP_NAME, AppLanguage, AppSettings, AppSnapshot, LOG_FILE_NAME, PlatformSummary,
+    APP_NAME, AppLanguage, AppSettings, AppSnapshot, LOG_FILE_NAME, PlatformSummary, ProfileRule,
     RECENT_EVENT_LIMIT, RuntimeDiagnostics, RuntimeEvent, RuntimeEventLevel, SETTINGS_FILE_NAME,
-    ThemePreference, default_preset_catalog,
+    ThemePreference, VisualPreset, default_preset_catalog,
 };
 use tauri::{AppHandle, Manager};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -59,6 +59,7 @@ impl ManagedState {
             settings.suspend_on_startup,
             settings.apply_to_related_windows,
         )?;
+        lens.set_profiles(settings.profiles.clone())?;
 
         Ok(Self {
             settings_store: Mutex::new(SettingsStore {
@@ -142,36 +143,105 @@ impl ManagedState {
         self.snapshot()
     }
 
-    pub fn attach_window(
+    pub fn save_profile_from_window(
         &self,
         window_id: &str,
-        preset: glare_mute_core::VisualPreset,
+        preset: VisualPreset,
     ) -> Result<AppSnapshot> {
-        let lens = self.lens.attach_window(window_id, preset)?;
-        let target = lens
-            .active_target
-            .as_ref()
-            .map(|entry| entry.title.as_str())
-            .unwrap_or("selected window");
+        let descriptor = self
+            .lens
+            .list_windows()?
+            .into_iter()
+            .find(|candidate| candidate.logical_target_id == window_id)
+            .ok_or_else(|| anyhow::anyhow!("The selected window is no longer available."))?;
+        let executable_path = descriptor
+            .executable_path
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("The selected window does not expose an executable path."))?;
+        let label = profile_label_for_window(&descriptor);
+
+        let settings = {
+            let mut store = self.settings_store.lock().expect("settings lock poisoned");
+            upsert_profile(
+                &mut store.current.profiles,
+                ProfileRule {
+                    id: String::new(),
+                    enabled: true,
+                    label: label.clone(),
+                    executable_path,
+                    preset,
+                    title_pattern: None,
+                    window_class: descriptor.window_class.clone(),
+                    notes: None,
+                },
+            );
+            persist_settings(&self.settings_file, &store.current)?;
+            store.current.clone()
+        };
+
+        self.lens.set_profiles(settings.profiles.clone())?;
         self.record_event(
             RuntimeEventLevel::Info,
-            "lens".to_string(),
-            format!("applied {:?} to {}", preset, target),
+            "profiles".to_string(),
+            format!("saved {:?} for {}", preset, label),
+        );
+
+        self.snapshot_with_settings(settings)
+    }
+
+    pub fn remove_profile(&self, profile_id: &str) -> Result<AppSnapshot> {
+        let (removed_label, next_profiles) = {
+            let mut store = self.settings_store.lock().expect("settings lock poisoned");
+            let Some(index) = store
+                .current
+                .profiles
+                .iter()
+                .position(|profile| profile.id == profile_id)
+            else {
+                anyhow::bail!("The selected saved app no longer exists.");
+            };
+
+            let removed = store.current.profiles.remove(index);
+            persist_settings(&self.settings_file, &store.current)?;
+            (removed.label, store.current.profiles.clone())
+        };
+        self.lens.set_profiles(next_profiles)?;
+        self.record_event(
+            RuntimeEventLevel::Info,
+            "profiles".to_string(),
+            format!("removed saved app {}", removed_label),
         );
 
         self.snapshot()
     }
 
-    pub fn detach_lens(&self) -> Result<AppSnapshot> {
-        self.lens.detach()?;
-        {
-            let mut diagnostics = self.diagnostics.lock().expect("diagnostics lock poisoned");
-            diagnostics.suspended = false;
-        }
+    pub fn set_profile_enabled(&self, profile_id: &str, enabled: bool) -> Result<AppSnapshot> {
+        let (updated_label, next_profiles) = {
+            let mut store = self.settings_store.lock().expect("settings lock poisoned");
+            let Some(profile) = store
+                .current
+                .profiles
+                .iter_mut()
+                .find(|profile| profile.id == profile_id)
+            else {
+                anyhow::bail!("The selected saved app no longer exists.");
+            };
+
+            profile.enabled = enabled;
+            let label = profile.label.clone();
+            persist_settings(&self.settings_file, &store.current)?;
+            (label, store.current.profiles.clone())
+        };
+        self.lens.set_profiles(next_profiles)?;
+
         self.record_event(
             RuntimeEventLevel::Info,
-            "lens".to_string(),
-            "turned off the current effect".to_string(),
+            "profiles".to_string(),
+            if enabled {
+                format!("enabled saved app {}", updated_label)
+            } else {
+                format!("disabled saved app {}", updated_label)
+            },
         );
 
         self.snapshot()
@@ -258,4 +328,46 @@ fn persist_settings(path: &PathBuf, settings: &AppSettings) -> Result<()> {
     let payload =
         serde_json::to_vec_pretty(settings).context("failed to encode settings as json")?;
     fs::write(path, payload).with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn upsert_profile(profiles: &mut Vec<ProfileRule>, mut next_profile: ProfileRule) {
+    if let Some(existing) = profiles.iter_mut().find(|profile| {
+        profile
+            .executable_path
+            .eq_ignore_ascii_case(&next_profile.executable_path)
+            && profile.window_class == next_profile.window_class
+            && profile.title_pattern == next_profile.title_pattern
+    }) {
+        existing.enabled = true;
+        existing.label = next_profile.label;
+        existing.preset = next_profile.preset;
+        existing.notes = next_profile.notes;
+        return;
+    }
+
+    next_profile.id = generate_profile_id(&next_profile);
+    profiles.push(next_profile);
+}
+
+fn generate_profile_id(profile: &ProfileRule) -> String {
+    let slug = executable_name(&profile.executable_path)
+        .unwrap_or_else(|| "app".to_string())
+        .to_ascii_lowercase()
+        .replace(|character: char| !character.is_ascii_alphanumeric(), "-");
+    let timestamp = OffsetDateTime::now_utc().unix_timestamp_nanos();
+    format!("profile-{slug}-{timestamp}")
+}
+
+fn profile_label_for_window(descriptor: &glare_mute_core::WindowDescriptor) -> String {
+    descriptor
+        .executable_path
+        .as_deref()
+        .and_then(executable_name)
+        .unwrap_or_else(|| descriptor.title.clone())
+}
+
+fn executable_name(path: &str) -> Option<String> {
+    Path::new(path)
+        .file_stem()
+        .map(|name| name.to_string_lossy().to_string())
 }

@@ -51,7 +51,7 @@ export function defaultSnapshot(): AppSnapshot {
           "magnificationBackend",
           "Magnification transform",
           "available",
-          "Mock preview keeps Invert and Greyscale Invert in the shared contract while native validation happens on Windows, including related-window coverage in the shared session model."
+          "Mock preview keeps Invert and Greyscale Invert in the shared contract while native validation happens on Windows, including saved app rules and related-window coverage."
         ),
         capability(
           "captureBackend",
@@ -68,12 +68,11 @@ export function defaultSnapshot(): AppSnapshot {
       ],
     },
     lens: {
-      activePreset: null,
-      activeTarget: null,
       coveredTargets: [],
+      profileSnapshots: [],
       backendLabel: "Mock transform backend",
       status: "detached",
-      summary: "No effect is active in the browser preview.",
+      summary: "No saved apps are active in the browser preview.",
     },
     windowCandidates: defaultWindowCandidates(),
   };

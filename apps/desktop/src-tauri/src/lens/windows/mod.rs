@@ -9,15 +9,15 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use glare_mute_core::{
-    LensSnapshot, LensStatus, VisualPreset, WindowAttachmentState, WindowDescriptor,
+    LensSnapshot, LensStatus, ProfileRule, ProfileSnapshot, VisualPreset,
+    WindowAttachmentState, WindowDescriptor,
 };
 use windows::Win32::UI::Magnification::{
     MW_FILTERMODE_EXCLUDE, MagInitialize, MagSetWindowFilterList, MagUninitialize,
 };
 
-use self::effects::preset_label;
 use self::overlay::OverlaySurface;
 use self::windowing::{
     RawWindowCandidate, ensure_bool, enumerate_raw_windows, presentation_target, pump_messages,
@@ -41,13 +41,12 @@ impl LensControllerImpl {
             } else {
                 LensStatus::Detached
             },
-            active_preset: None,
-            active_target: None,
             covered_targets: Vec::new(),
+            profile_snapshots: Vec::new(),
             summary: if initially_suspended {
-                "The current effect is paused.".to_string()
+                "Saved effects are paused.".to_string()
             } else {
-                "No effect is active.".to_string()
+                "No saved apps are active.".to_string()
             },
             backend_label: "Windows Magnification backend".to_string(),
         }));
@@ -72,44 +71,18 @@ impl LensControllerImpl {
         })
     }
 
-    pub(super) fn attach_window(
-        &self,
-        window_id: &str,
-        preset: VisualPreset,
-    ) -> Result<LensSnapshot> {
-        if !matches!(preset, VisualPreset::GreyscaleInvert | VisualPreset::Invert) {
-            bail!("This effect is not implemented in the native Windows path right now.")
-        }
-
-        let descriptor = enumerate_logical_targets()?
-            .into_iter()
-            .map(|candidate| candidate.descriptor)
-            .find(|candidate| candidate.logical_target_id == window_id)
-            .ok_or_else(|| anyhow!("The selected window is no longer available."))?;
+    pub(super) fn set_profiles(&self, profiles: Vec<ProfileRule>) -> Result<LensSnapshot> {
         let (response_tx, response_rx) = mpsc::channel();
 
         self.command_tx
-            .send(ControllerCommand::Attach {
-                descriptor,
-                preset,
+            .send(ControllerCommand::SetProfiles {
+                profiles,
                 response_tx,
             })
-            .context("failed to send attach command to lens worker")?;
+            .context("failed to send profile update command to lens worker")?;
         response_rx
             .recv()
-            .context("failed to receive attach confirmation from lens worker")??;
-
-        self.snapshot()
-    }
-
-    pub(super) fn detach(&self) -> Result<LensSnapshot> {
-        let (response_tx, response_rx) = mpsc::channel();
-        self.command_tx
-            .send(ControllerCommand::Detach { response_tx })
-            .context("failed to send detach command to lens worker")?;
-        response_rx
-            .recv()
-            .context("failed to receive detach confirmation from lens worker")??;
+            .context("failed to receive profile update confirmation from lens worker")??;
 
         self.snapshot()
     }
@@ -170,12 +143,8 @@ impl Drop for LensControllerImpl {
 }
 
 enum ControllerCommand {
-    Attach {
-        descriptor: WindowDescriptor,
-        preset: VisualPreset,
-        response_tx: Sender<Result<()>>,
-    },
-    Detach {
+    SetProfiles {
+        profiles: Vec<ProfileRule>,
         response_tx: Sender<Result<()>>,
     },
     SetApplyToRelatedWindows {
@@ -197,15 +166,18 @@ struct LogicalWindowCandidate {
     allows_related_window_expansion: bool,
 }
 
-struct AttachmentSession {
-    active_logical_target_id: String,
+#[derive(Clone)]
+struct SurfaceAssignment {
+    target_window_id: String,
+    raw_target: RawWindowCandidate,
     preset: VisualPreset,
 }
 
 struct WorkerState {
     shared_snapshot: Arc<Mutex<LensSnapshot>>,
-    session: Option<AttachmentSession>,
+    profiles: Vec<ProfileRule>,
     covered_targets: Vec<WindowDescriptor>,
+    profile_snapshots: Vec<ProfileSnapshot>,
     surfaces: Vec<OverlaySurface>,
     suspended: bool,
     apply_to_related_windows: bool,
@@ -236,16 +208,11 @@ fn lens_thread_main(
         while pump_messages()? {}
 
         match command_rx.recv_timeout(THREAD_TICK_INTERVAL) {
-            Ok(ControllerCommand::Attach {
-                descriptor,
-                preset,
+            Ok(ControllerCommand::SetProfiles {
+                profiles,
                 response_tx,
             }) => {
-                let result = runtime.attach(descriptor, preset);
-                let _ = response_tx.send(result);
-            }
-            Ok(ControllerCommand::Detach { response_tx }) => {
-                let result = runtime.detach();
+                let result = runtime.set_profiles(profiles);
                 let _ = response_tx.send(result);
             }
             Ok(ControllerCommand::SetApplyToRelatedWindows {
@@ -286,8 +253,9 @@ impl WorkerState {
 
         Ok(Self {
             shared_snapshot,
-            session: None,
+            profiles: Vec::new(),
             covered_targets: Vec::new(),
+            profile_snapshots: Vec::new(),
             surfaces: Vec::new(),
             suspended: false,
             apply_to_related_windows,
@@ -295,37 +263,22 @@ impl WorkerState {
         })
     }
 
-    fn attach(&mut self, descriptor: WindowDescriptor, preset: VisualPreset) -> Result<()> {
-        tracing::info!(
-            logical_target_id = %descriptor.logical_target_id,
-            window_id = %descriptor.window_id,
-            title = %descriptor.title,
-            preset = ?preset,
-            process_id = descriptor.process_id,
-            apply_to_related_windows = self.apply_to_related_windows,
-            "attaching magnifier backend"
-        );
-
-        self.session = Some(AttachmentSession {
-            active_logical_target_id: descriptor.logical_target_id.clone(),
-            preset,
-        });
-        self.last_target_scan = Instant::now() - TARGET_SCAN_INTERVAL;
-        self.sync_targets(true)?;
-
-        if self.session.is_none() {
-            bail!("The selected window is no longer available.");
+    fn set_profiles(&mut self, profiles: Vec<ProfileRule>) -> Result<()> {
+        for profile in &profiles {
+            if !matches!(profile.preset, VisualPreset::GreyscaleInvert | VisualPreset::Invert) {
+                bail!("This effect is not implemented in the native Windows path right now.");
+            }
         }
 
+        self.profiles = profiles;
+        self.last_target_scan = Instant::now() - TARGET_SCAN_INTERVAL;
+        self.sync_targets(true)?;
         self.tick();
-        Ok(())
-    }
-
-    fn detach(&mut self) -> Result<()> {
-        self.suspended = false;
-        self.clear_session()?;
-        self.update_shared_snapshot();
-        tracing::info!("detached magnifier backend");
+        tracing::info!(
+            enabled_profiles = self.profiles.iter().filter(|profile| profile.enabled).count(),
+            apply_to_related_windows = self.apply_to_related_windows,
+            "updated magnifier profile set"
+        );
         Ok(())
     }
 
@@ -359,8 +312,8 @@ impl WorkerState {
 
     fn tick(&mut self) {
         if let Err(error) = self.sync_targets(false) {
-            tracing::warn!(?error, "failed to refresh related window coverage");
-            let _ = self.clear_session();
+            tracing::warn!(?error, "failed to refresh saved app coverage");
+            let _ = self.clear_runtime_state();
             self.update_shared_snapshot();
             return;
         }
@@ -387,7 +340,7 @@ impl WorkerState {
     }
 
     fn cleanup(&mut self) -> Result<()> {
-        self.clear_session()
+        self.clear_runtime_state()
     }
 
     fn sync_targets(&mut self, force: bool) -> Result<()> {
@@ -396,67 +349,81 @@ impl WorkerState {
         }
         self.last_target_scan = Instant::now();
 
-        let Some(session) = self.session.as_ref() else {
-            return Ok(());
-        };
-
-        let preset = session.preset;
-        let logical_targets = enumerate_logical_targets()?;
-        let Some(active_target) = logical_targets
-            .iter()
-            .find(|candidate| {
-                candidate.descriptor.logical_target_id == session.active_logical_target_id
-            })
-            .cloned()
-        else {
-            tracing::info!(
-                logical_target_id = %session.active_logical_target_id,
-                "no logical targets remain for the current session"
-            );
-            self.clear_session()?;
+        if self.profiles.is_empty() {
+            self.clear_runtime_state()?;
             self.update_shared_snapshot();
             return Ok(());
-        };
+        }
 
-        let covered_targets = if self.apply_to_related_windows
-            && active_target.allows_related_window_expansion
-        {
-            logical_targets
-                .into_iter()
-                .filter(|candidate| candidate.related_group_key == active_target.related_group_key)
-                .collect::<Vec<_>>()
-        } else {
-            vec![active_target.clone()]
-        };
+        let logical_targets = enumerate_logical_targets()?;
 
-        self.covered_targets = covered_targets
-            .iter()
-            .map(|candidate| candidate.descriptor.clone())
-            .collect();
-        self.reconcile_surfaces(&covered_targets, preset)?;
+        let mut covered_targets = Vec::new();
+        let mut covered_ids = HashSet::new();
+        let mut profile_snapshots = Vec::with_capacity(self.profiles.len());
+        let mut desired_assignments = Vec::new();
+        let mut assigned_window_ids = HashSet::new();
+
+        for profile in &self.profiles {
+            let matching_candidates = resolve_profile_targets(
+                profile,
+                &logical_targets,
+                self.apply_to_related_windows,
+            );
+            let matching_targets = matching_candidates
+                .iter()
+                .map(|candidate| candidate.descriptor.clone())
+                .collect::<Vec<_>>();
+
+            if profile.enabled {
+                for descriptor in &matching_targets {
+                    if covered_ids.insert(descriptor.logical_target_id.clone()) {
+                        covered_targets.push(descriptor.clone());
+                    }
+                }
+
+                for raw_target in matching_candidates
+                    .iter()
+                    .flat_map(|candidate| candidate.raw_targets.iter())
+                    .filter(|candidate| {
+                        candidate.attachment_state == WindowAttachmentState::Available
+                            && !candidate.is_cloaked
+                    })
+                {
+                    if assigned_window_ids.insert(raw_target.window_id.clone()) {
+                        desired_assignments.push(SurfaceAssignment {
+                            target_window_id: raw_target.window_id.clone(),
+                            raw_target: raw_target.clone(),
+                            preset: profile.preset,
+                        });
+                    }
+                }
+            }
+
+            profile_snapshots.push(ProfileSnapshot {
+                profile_id: profile.id.clone(),
+                label: profile_label(profile),
+                enabled: profile.enabled,
+                preset: profile.preset,
+                matching_targets,
+            });
+        }
+
+        self.covered_targets = covered_targets;
+        self.profile_snapshots = profile_snapshots;
+        self.reconcile_surfaces(&desired_assignments)?;
         self.update_shared_snapshot();
         Ok(())
     }
 
-    fn reconcile_surfaces(
-        &mut self,
-        covered_targets: &[LogicalWindowCandidate],
-        preset: VisualPreset,
-    ) -> Result<()> {
-        let desired_targets = covered_targets
-            .iter()
-            .flat_map(|candidate| candidate.raw_targets.iter())
-            .filter(|candidate| {
-                candidate.attachment_state == WindowAttachmentState::Available
-                    && !candidate.is_cloaked
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
+    fn reconcile_surfaces(&mut self, desired_targets: &[SurfaceAssignment]) -> Result<()> {
         let desired_ids = desired_targets
             .iter()
-            .map(|candidate| candidate.window_id.clone())
+            .map(|candidate| candidate.target_window_id.clone())
             .collect::<HashSet<_>>();
+        let desired_by_id = desired_targets
+            .iter()
+            .map(|assignment| (assignment.target_window_id.as_str(), assignment))
+            .collect::<HashMap<_, _>>();
 
         let mut retained_surfaces = Vec::with_capacity(self.surfaces.len());
         for surface in self.surfaces.drain(..) {
@@ -469,20 +436,25 @@ impl WorkerState {
         self.surfaces = retained_surfaces;
 
         for surface in &mut self.surfaces {
-            surface.set_effect(preset)?;
+            if let Some(assignment) = desired_by_id.get(surface.target_window_id.as_str()) {
+                surface.set_effect(assignment.preset)?;
+            }
         }
 
-        for descriptor in desired_targets {
+        for assignment in desired_targets {
             if self
                 .surfaces
                 .iter()
-                .any(|surface| surface.target_window_id == descriptor.window_id)
+                .any(|surface| surface.target_window_id == assignment.target_window_id)
             {
                 continue;
             }
 
             self.surfaces
-                .push(OverlaySurface::create(&descriptor.window_id, preset)?);
+                .push(OverlaySurface::create(
+                    &assignment.raw_target.window_id,
+                    assignment.preset,
+                )?);
         }
 
         self.refresh_filter_lists()?;
@@ -517,9 +489,9 @@ impl WorkerState {
         Ok(())
     }
 
-    fn clear_session(&mut self) -> Result<()> {
+    fn clear_runtime_state(&mut self) -> Result<()> {
         self.covered_targets.clear();
-        self.session = None;
+        self.profile_snapshots.clear();
 
         for surface in self.surfaces.drain(..) {
             surface.destroy()?;
@@ -534,21 +506,9 @@ impl WorkerState {
         }
     }
 
-    fn active_target(&self) -> Option<WindowDescriptor> {
-        let session = self.session.as_ref()?;
-        self.covered_targets
-            .iter()
-            .find(|candidate| candidate.logical_target_id == session.active_logical_target_id)
-            .cloned()
-            .or_else(|| self.covered_targets.first().cloned())
-    }
-
-    fn active_preset(&self) -> Option<VisualPreset> {
-        self.session.as_ref().map(|session| session.preset)
-    }
-
     fn status(&self) -> LensStatus {
-        if self.session.is_none() {
+        let enabled_profiles = self.profiles.iter().filter(|profile| profile.enabled).count();
+        if enabled_profiles == 0 {
             return if self.suspended {
                 LensStatus::Suspended
             } else {
@@ -573,65 +533,27 @@ impl WorkerState {
 
     fn update_shared_snapshot(&self) {
         let status = self.status();
-        let active_target = self.active_target();
-        let active_preset = self.active_preset();
         let visible_count = self
             .covered_targets
             .iter()
             .filter(|candidate| candidate.attachment_state == WindowAttachmentState::Available)
             .count();
-        let covered_count = self.covered_targets.len();
+        let enabled_count = self.profiles.iter().filter(|profile| profile.enabled).count();
         let summary = match status {
-            LensStatus::Detached => "No effect is active.".to_string(),
+            LensStatus::Detached => "No saved apps are active.".to_string(),
             LensStatus::Pending => {
-                if covered_count > 1 {
-                    format!(
-                        "{} will appear when the selected app is back on screen.",
-                        preset_label(active_preset)
-                    )
+                if enabled_count == 1 {
+                    "A saved effect is waiting for a matching window.".to_string()
                 } else {
-                    let target = active_target
-                        .as_ref()
-                        .map(|entry| entry.title.as_str())
-                        .unwrap_or("the selected window");
-                    format!(
-                        "{} will appear when {target} is back on screen.",
-                        preset_label(active_preset)
-                    )
+                    format!("{enabled_count} saved effects are waiting for matching windows.")
                 }
             }
-            LensStatus::Attached => {
-                if covered_count > 1 {
-                    format!(
-                        "{} is active on {} windows from the same app.",
-                        preset_label(active_preset),
-                        visible_count.max(1)
-                    )
-                } else {
-                    let target = active_target
-                        .as_ref()
-                        .map(|entry| entry.title.as_str())
-                        .unwrap_or("the selected window");
-                    format!("{} is active on {target}.", preset_label(active_preset))
-                }
-            }
-            LensStatus::Suspended => {
-                if covered_count > 1 {
-                    format!(
-                        "{} is paused for {} windows from the same app.",
-                        preset_label(active_preset),
-                        covered_count
-                    )
-                } else if let Some(target) = active_target.as_ref() {
-                    format!(
-                        "{} is paused for {}.",
-                        preset_label(active_preset),
-                        target.title
-                    )
-                } else {
-                    "The current effect is paused.".to_string()
-                }
-            }
+            LensStatus::Attached => format!(
+                "Effects are active on {} windows across {} saved apps.",
+                visible_count.max(1),
+                enabled_count.max(1)
+            ),
+            LensStatus::Suspended => "Saved effects are paused.".to_string(),
         };
 
         let mut snapshot = self
@@ -639,12 +561,95 @@ impl WorkerState {
             .lock()
             .expect("lens snapshot lock poisoned");
         snapshot.status = status;
-        snapshot.active_target = active_target;
-        snapshot.active_preset = active_preset;
         snapshot.covered_targets = self.covered_targets.clone();
+        snapshot.profile_snapshots = self.profile_snapshots.clone();
         snapshot.summary = summary;
         snapshot.backend_label = "Windows Magnification backend".to_string();
     }
+}
+
+fn resolve_profile_targets(
+    profile: &ProfileRule,
+    logical_targets: &[LogicalWindowCandidate],
+    apply_to_related_windows: bool,
+) -> Vec<LogicalWindowCandidate> {
+    if !profile.enabled {
+        return Vec::new();
+    }
+
+    let matched_targets = logical_targets
+        .iter()
+        .filter(|candidate| profile_matches_candidate(profile, &candidate.descriptor))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if !apply_to_related_windows {
+        return matched_targets;
+    }
+
+    let related_group_keys = matched_targets
+        .iter()
+        .filter(|candidate| candidate.allows_related_window_expansion)
+        .map(|candidate| candidate.related_group_key.clone())
+        .collect::<HashSet<_>>();
+
+    if related_group_keys.is_empty() {
+        return matched_targets;
+    }
+
+    let mut expanded_targets = Vec::new();
+    let mut seen = HashSet::new();
+    for candidate in logical_targets {
+        if (profile_matches_candidate(profile, &candidate.descriptor)
+            || related_group_keys.contains(&candidate.related_group_key))
+            && seen.insert(candidate.descriptor.logical_target_id.clone())
+        {
+            expanded_targets.push(candidate.clone());
+        }
+    }
+
+    expanded_targets
+}
+
+fn profile_matches_candidate(profile: &ProfileRule, candidate: &WindowDescriptor) -> bool {
+    let Some(candidate_path) = candidate.executable_path.as_deref() else {
+        return false;
+    };
+
+    if !profile.executable_path.eq_ignore_ascii_case(candidate_path) {
+        return false;
+    }
+
+    if let Some(window_class) = profile.window_class.as_deref() {
+        let Some(candidate_class) = candidate.window_class.as_deref() else {
+            return false;
+        };
+
+        if !window_class.eq_ignore_ascii_case(candidate_class) {
+            return false;
+        }
+    }
+
+    if let Some(title_pattern) = profile.title_pattern.as_deref() {
+        let normalized_pattern = title_pattern.trim().to_lowercase();
+        if normalized_pattern.is_empty() {
+            return true;
+        }
+
+        return candidate.title.to_lowercase().contains(&normalized_pattern);
+    }
+
+    true
+}
+
+fn profile_label(profile: &ProfileRule) -> String {
+    if !profile.label.trim().is_empty() {
+        return profile.label.clone();
+    }
+
+    executable_basename(Some(profile.executable_path.as_str())).unwrap_or_else(|| {
+        profile.executable_path.clone()
+    })
 }
 
 fn enumerate_logical_targets() -> Result<Vec<LogicalWindowCandidate>> {

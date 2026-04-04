@@ -20,7 +20,7 @@ import {
   watchSystemTheme,
 } from "../lib/theme";
 
-type BusyAction = "apply" | "copy" | "logs" | "settings" | "turnOff" | null;
+type BusyAction = "saveProfile" | "profiles" | "copy" | "logs" | "settings" | null;
 
 const DEFAULT_PRESET: VisualPreset = "invert";
 
@@ -106,10 +106,7 @@ function App() {
     setSelectedPreset((current) =>
       nextEffectChoices.some((preset) => preset.id === current)
         ? current
-        : snapshot.lens.activePreset &&
-            nextEffectChoices.some((preset) => preset.id === snapshot.lens.activePreset)
-          ? snapshot.lens.activePreset
-          : (nextEffectChoices[0]?.id ?? DEFAULT_PRESET)
+        : (nextEffectChoices[0]?.id ?? DEFAULT_PRESET)
     );
   }, [snapshot]);
 
@@ -158,11 +155,27 @@ function App() {
   const coveredWindowIds = new Set(
     snapshot?.lens.coveredTargets.map((target) => target.logicalTargetId) ?? []
   );
+  const savedProfiles = snapshot
+    ? snapshot.settings.profiles.map((profile) => ({
+        profile,
+        runtime:
+          snapshot.lens.profileSnapshots.find((entry) => entry.profileId === profile.id) ?? null,
+      }))
+    : [];
   const selectedPresetDefinition =
     localizedEffectChoices.find((preset) => preset.id === selectedPreset) ?? null;
   const languageChoices = languageOptions(messages);
   const themeChoices = themeOptionsFor(messages);
-  const canAttachSelectedWindow = Boolean(selectedWindow) && busyAction !== "apply";
+  const selectedWindowHasSavedProfile = Boolean(
+    selectedWindow?.executablePath &&
+      snapshot?.settings.profiles.some(
+        (profile) =>
+          profile.executablePath.toLowerCase() === selectedWindow.executablePath?.toLowerCase() &&
+          profile.titlePattern === null &&
+          profile.windowClass === (selectedWindow.windowClass ?? null)
+      )
+  );
+  const canSaveSelectedWindow = Boolean(selectedWindow) && busyAction !== "saveProfile";
 
   async function updateSnapshot(task: () => Promise<AppSnapshot>, busy: BusyAction) {
     setBusyAction(busy);
@@ -202,19 +215,23 @@ function App() {
     await updateSnapshot(() => desktopClient.setApplyToRelatedWindows(enabled), "settings");
   }
 
-  async function handleAttachSelectedWindow() {
-    if (!selectedWindow || !canAttachSelectedWindow) {
+  async function handleSaveProfile() {
+    if (!selectedWindow || !canSaveSelectedWindow) {
       return;
     }
 
     await updateSnapshot(
-      () => desktopClient.attachWindow(selectedWindow.logicalTargetId, selectedPreset),
-      "apply"
+      () => desktopClient.saveProfileFromWindow(selectedWindow.logicalTargetId, selectedPreset),
+      "saveProfile"
     );
   }
 
-  async function handleDetachLens() {
-    await updateSnapshot(() => desktopClient.detachLens(), "turnOff");
+  async function handleToggleProfile(profileId: string, enabled: boolean) {
+    await updateSnapshot(() => desktopClient.setProfileEnabled(profileId, enabled), "profiles");
+  }
+
+  async function handleRemoveProfile(profileId: string) {
+    await updateSnapshot(() => desktopClient.removeProfile(profileId), "profiles");
   }
 
   async function handleOpenLogs() {
@@ -288,14 +305,17 @@ function App() {
 
           <EffectPane
             busyAction={busyAction}
-            canAttachSelectedWindow={canAttachSelectedWindow}
+            canSaveSelectedWindow={canSaveSelectedWindow}
             messages={messages}
-            onAttach={() => void handleAttachSelectedWindow()}
-            onDetach={() => void handleDetachLens()}
             onPresetChange={setSelectedPreset}
+            onRemoveProfile={(profileId) => void handleRemoveProfile(profileId)}
+            onSaveProfile={() => void handleSaveProfile()}
+            onToggleProfile={(profileId, enabled) => void handleToggleProfile(profileId, enabled)}
             selectedPreset={selectedPreset}
             selectedPresetDefinition={selectedPresetDefinition}
+            selectedWindowHasSavedProfile={selectedWindowHasSavedProfile}
             selectedWindow={selectedWindow}
+            savedProfiles={savedProfiles}
             snapshot={{
               ...snapshot,
               presets: localizedEffectChoices,

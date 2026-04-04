@@ -1,37 +1,45 @@
 import { PaneHeader } from "../../components/PaneHeader";
 import { StatusChip } from "../../components/StatusChip";
-import type { AppSnapshot, VisualPreset, WindowDescriptor } from "../../lib/contracts";
+import type { AppSnapshot, ProfileRule, VisualPreset, WindowDescriptor } from "../../lib/contracts";
 import type { Messages } from "../../lib/i18n";
 import { SelectedWindowDetails } from "../windows/SelectedWindowDetails";
+import { SavedProfilesSection } from "./SavedProfilesSection";
 import { effectMessage, effectStatusChip, effectStatusLabel } from "./effect-utils";
 
-type BusyAction = "apply" | "copy" | "logs" | "settings" | "turnOff" | null;
+type BusyAction = "saveProfile" | "profiles" | "copy" | "logs" | "settings" | null;
 
 export function EffectPane({
   busyAction,
-  canAttachSelectedWindow,
+  canSaveSelectedWindow,
   messages,
-  onAttach,
-  onDetach,
   onPresetChange,
+  onRemoveProfile,
+  onSaveProfile,
+  onToggleProfile,
   selectedPreset,
   selectedPresetDefinition,
+  selectedWindowHasSavedProfile,
   selectedWindow,
+  savedProfiles,
   snapshot,
 }: {
   busyAction: BusyAction;
-  canAttachSelectedWindow: boolean;
+  canSaveSelectedWindow: boolean;
   messages: Messages;
-  onAttach: () => void;
-  onDetach: () => void;
   onPresetChange: (preset: VisualPreset) => void;
+  onRemoveProfile: (profileId: string) => void;
+  onSaveProfile: () => void;
+  onToggleProfile: (profileId: string, enabled: boolean) => void;
   selectedPreset: VisualPreset;
   selectedPresetDefinition: AppSnapshot["presets"][number] | null;
+  selectedWindowHasSavedProfile: boolean;
   selectedWindow: WindowDescriptor | null;
+  savedProfiles: {
+    profile: ProfileRule;
+    runtime: AppSnapshot["lens"]["profileSnapshots"][number] | null;
+  }[];
   snapshot: AppSnapshot;
 }) {
-  const activeTarget = snapshot.lens.activeTarget;
-
   return (
     <section className="workflow-pane effect-pane">
       <div className="effect-header">
@@ -70,30 +78,24 @@ export function EffectPane({
       <section className="pane-section action-section">
         <button
           className="button"
-          disabled={!canAttachSelectedWindow}
-          onClick={onAttach}
+          disabled={!canSaveSelectedWindow}
+          onClick={onSaveProfile}
           type="button"
         >
-          {messages.applyButton({
-            busy: busyAction === "apply",
+          {messages.saveProfileButton({
+            busy: busyAction === "saveProfile",
             hasPreset: Boolean(selectedPresetDefinition),
+            hasSavedProfile: selectedWindowHasSavedProfile,
             hasSelectedWindow: Boolean(selectedWindow),
             presetLabel: selectedPresetDefinition?.label ?? null,
           })}
         </button>
         <p className="body-copy action-hint">
-          {messages.applyHint(selectedWindow?.attachmentState ?? null)}
+          {messages.saveProfileHint({
+            attachmentState: selectedWindow?.attachmentState ?? null,
+            hasSavedProfile: selectedWindowHasSavedProfile,
+          })}
         </p>
-        <div className="button-row">
-          <button
-            className="button button-secondary"
-            disabled={!activeTarget || busyAction === "turnOff"}
-            onClick={onDetach}
-            type="button"
-          >
-            {busyAction === "turnOff" ? messages.turningOff : messages.turnOff}
-          </button>
-        </div>
       </section>
 
       <section className="pane-section selected-window-section">
@@ -108,6 +110,14 @@ export function EffectPane({
           <div className="empty-state">{messages.selectedWindowEmpty}</div>
         )}
       </section>
+
+      <SavedProfilesSection
+        busyAction={busyAction}
+        messages={messages}
+        onRemoveProfile={onRemoveProfile}
+        onToggleProfile={onToggleProfile}
+        profiles={savedProfiles}
+      />
     </section>
   );
 }

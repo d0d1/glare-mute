@@ -1,5 +1,6 @@
 .detail-list,
-.log-list {
+.log-list,
+.saved-profile-list {
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -140,6 +141,27 @@
 
 .action-hint {
   min-height: 2.8em;
+}
+
+.saved-profile-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saved-profile-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background-muted);
+}
+
+.saved-profile-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .inline-details {

@@ -7,15 +7,10 @@ export function effectStatusLabel(messages: Messages, status: AppSnapshot["lens"
 }
 
 export function effectMessage(messages: Messages, snapshot: AppSnapshot) {
-  if (snapshot.lens.status === "detached" || !snapshot.lens.activePreset) {
-    return messages.effectHintDetached;
-  }
-
   return messages.effectSummary({
     coveredCount: snapshot.lens.coveredTargets.length,
-    presetLabel: messages.presetLabel(snapshot.lens.activePreset),
+    enabledProfileCount: snapshot.settings.profiles.filter((profile) => profile.enabled).length,
     status: snapshot.lens.status,
-    targetTitle: snapshot.lens.activeTarget?.title ?? null,
     visibleCount: snapshot.lens.coveredTargets.filter(
       (target) => target.attachmentState === "available"
     ).length,

@@ -95,6 +95,12 @@ pub struct CapabilityDescriptor {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ProfileRule {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default = "default_profile_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub label: String,
     pub executable_path: String,
     pub preset: VisualPreset,
     pub title_pattern: Option<String>,
@@ -187,11 +193,20 @@ pub enum LensStatus {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProfileSnapshot {
+    pub profile_id: String,
+    pub label: String,
+    pub enabled: bool,
+    pub preset: VisualPreset,
+    pub matching_targets: Vec<WindowDescriptor>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LensSnapshot {
     pub status: LensStatus,
-    pub active_preset: Option<VisualPreset>,
-    pub active_target: Option<WindowDescriptor>,
     pub covered_targets: Vec<WindowDescriptor>,
+    pub profile_snapshots: Vec<ProfileSnapshot>,
     pub summary: String,
     pub backend_label: String,
 }
@@ -244,6 +259,10 @@ impl<'de> Deserialize<'de> for VisualPreset {
 }
 
 fn default_apply_to_related_windows() -> bool {
+    true
+}
+
+fn default_profile_enabled() -> bool {
     true
 }
 

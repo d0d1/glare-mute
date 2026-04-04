@@ -53,19 +53,34 @@ export function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
           .applyToRelatedWindows ?? true,
       profiles: snapshot.settings.profiles.map((profile) => ({
         ...profile,
+        id: profile.id ?? profile.executablePath,
+        enabled: profile.enabled ?? true,
+        label: profile.label ?? "",
         preset: normalizePersistedPresetId(profile.preset),
       })),
     },
     lens: {
       ...snapshot.lens,
-      activePreset: normalizeOptionalPresetId(snapshot.lens.activePreset),
-      activeTarget: snapshot.lens.activeTarget
-        ? normalizeWindowDescriptor(snapshot.lens.activeTarget as WindowDescriptor)
-        : null,
       coveredTargets: (
         (snapshot.lens as AppSnapshot["lens"] & { coveredTargets?: WindowDescriptor[] })
-          .coveredTargets ?? (snapshot.lens.activeTarget ? [snapshot.lens.activeTarget] : [])
+          .coveredTargets ?? []
       ).map((descriptor) => normalizeWindowDescriptor(descriptor)),
+      profileSnapshots: (
+        (
+          snapshot.lens as AppSnapshot["lens"] & {
+            profileSnapshots?: (AppSnapshot["lens"]["profileSnapshots"][number] & {
+              profileId?: string;
+              matchingTargets?: WindowDescriptor[];
+            })[];
+          }
+        ).profileSnapshots ?? []
+      ).map((profile) => ({
+        ...profile,
+        profileId: profile.profileId ?? profile.label,
+        matchingTargets: (profile.matchingTargets ?? []).map((descriptor) =>
+          normalizeWindowDescriptor(descriptor)
+        ),
+      })),
     },
     windowCandidates: snapshot.windowCandidates.map((descriptor) =>
       normalizeWindowDescriptor(descriptor)
@@ -79,8 +94,4 @@ export function normalizePersistedPresetId(preset: LegacyVisualPreset): VisualPr
   }
 
   return preset;
-}
-
-function normalizeOptionalPresetId(preset: LegacyVisualPreset | null): VisualPreset | null {
-  return preset === null ? null : normalizePersistedPresetId(preset);
 }

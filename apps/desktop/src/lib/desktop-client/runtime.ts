@@ -24,10 +24,6 @@ async function loadInvoke() {
 
 export function createTauriDesktopClient(): DesktopClient {
   return {
-    async attachWindow(windowId: string, preset: VisualPreset) {
-      const invoke = await loadInvoke();
-      return invoke<AppSnapshot>("attach_window", { windowId, preset });
-    },
     async appendFrontendLog(level: RuntimeEventLevel, source: string, message: string) {
       const invoke = await loadInvoke();
       return invoke("append_frontend_log", { level, source, message });
@@ -35,10 +31,6 @@ export function createTauriDesktopClient(): DesktopClient {
     async bootstrapState() {
       const invoke = await loadInvoke();
       return invoke<AppSnapshot>("bootstrap_state");
-    },
-    async detachLens() {
-      const invoke = await loadInvoke();
-      return invoke<AppSnapshot>("detach_lens");
     },
     async getDebugReport() {
       const invoke = await loadInvoke();
@@ -52,6 +44,14 @@ export function createTauriDesktopClient(): DesktopClient {
       const invoke = await loadInvoke();
       return invoke<AppSnapshot>("refresh_window_candidates");
     },
+    async removeProfile(profileId: string) {
+      const invoke = await loadInvoke();
+      return invoke<AppSnapshot>("remove_profile", { profileId });
+    },
+    async saveProfileFromWindow(windowId: string, preset: VisualPreset) {
+      const invoke = await loadInvoke();
+      return invoke<AppSnapshot>("save_profile_from_window", { windowId, preset });
+    },
     async setApplyToRelatedWindows(enabled: boolean) {
       const invoke = await loadInvoke();
       return invoke<AppSnapshot>("set_apply_to_related_windows", { enabled });
@@ -59,6 +59,10 @@ export function createTauriDesktopClient(): DesktopClient {
     async setLanguage(language: AppLanguage) {
       const invoke = await loadInvoke();
       return invoke<AppSnapshot>("set_language", { language });
+    },
+    async setProfileEnabled(profileId: string, enabled: boolean) {
+      const invoke = await loadInvoke();
+      return invoke<AppSnapshot>("set_profile_enabled", { profileId, enabled });
     },
     async setThemePreference(theme: ThemePreference) {
       const invoke = await loadInvoke();
