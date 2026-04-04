@@ -6,7 +6,7 @@ Currently available in English, Portuguese (Brazil), and Spanish.
 
 ## How to use
 
-1. Open the app you want to soften.
+1. Open the app you want to apply the effect to.
 2. Open Glare mute and pick that window from the list.
 3. Choose **Invert** or **Greyscale Invert**.
 4. Apply the effect.
