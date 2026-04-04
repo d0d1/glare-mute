@@ -12,6 +12,8 @@ Currently available in English, Portuguese (Brazil), and Spanish.
 4. Apply the effect.
 5. Turn it off when you are done.
 
+To affect apps running as administrator, Glare mute must also be launched as administrator. If it is already running from the tray, close it first and relaunch it with administrator permissions. This can matter for Windows tools such as Registry Editor (`regedit`) and other legacy administrative apps.
+
 ## Preview
 
 A typical use case is a bright legacy Windows app that stays white even when the rest of the system is dark.
