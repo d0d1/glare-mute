@@ -1,4 +1,4 @@
-export type AppLanguage = "system" | "en" | "pt-BR" | "es";
+export type AppLanguage = "system" | "en" | "pt-BR" | "es" | "fr" | "zh-Hans" | "hi" | "ar" | "bn";
 export type ThemePreference = "system" | "light" | "dark" | "invert" | "greyscaleInvert";
 export type EffectFamily = "tint" | "transform";
 export type VisualPreset = "warmDim" | "invert" | "greyscaleInvert";

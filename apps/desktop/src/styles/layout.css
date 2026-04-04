@@ -76,9 +76,9 @@
   display: grid;
   grid-template-columns: minmax(0, 1.16fr) minmax(380px, 0.92fr);
   align-items: stretch;
-  max-block-size: min(720px, calc(100vh - 260px));
+  min-block-size: min(720px, calc(100vh - 260px));
   background: var(--background-panel-strong);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-sm);
 }
 
@@ -99,6 +99,7 @@
 .effect-pane {
   align-content: start;
   grid-auto-rows: min-content;
+  min-block-size: 0;
 }
 
 .workflow-pane + .workflow-pane {

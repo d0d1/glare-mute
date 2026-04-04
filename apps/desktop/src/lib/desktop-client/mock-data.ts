@@ -13,13 +13,13 @@ export function defaultSnapshot(): AppSnapshot {
       profiles: [],
     },
     presets: [
-      preset("invert", "Invert", "transform", "A full-color invert that preserves non-grey cues."),
-      preset("warmDim", "Warm Dim", "tint", "An amber-forward dim preset tuned for glare."),
+      preset("invert", "Invert", "transform", "A full-color invert that preserves color cues."),
+      preset("warmDim", "Warm Dim", "tint", "A warmer amber tint for bright interfaces."),
       preset(
         "greyscaleInvert",
         "Greyscale Invert",
         "transform",
-        "The transform path for harsh apps that ignore every other theme signal."
+        "A greyscale invert for light interfaces that ignore dark mode."
       ),
     ],
     diagnostics: {

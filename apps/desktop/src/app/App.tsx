@@ -80,6 +80,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.lang = language;
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }, [language]);
 
   const backendId = snapshot?.platform.backendId ?? null;

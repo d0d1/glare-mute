@@ -2,8 +2,6 @@
 
 Glare mute is a Windows accessibility app for people who need bright apps toned down without changing the rest of the desktop.
 
-Currently available in English, Portuguese (Brazil), and Spanish.
-
 ## How to use
 
 1. Open the app you want to apply the effect to.
@@ -34,6 +32,8 @@ A typical use case is a bright legacy Windows app that stays white even when the
 ## Install
 
 Download the latest release from GitHub Releases.
+
+Currently available in English, Portuguese (Brazil), Spanish, French, Simplified Chinese, Hindi, Arabic, and Bengali.
 
 - **Recommended:** use the Windows setup installer
 - **Portable:** use the standalone `.exe`

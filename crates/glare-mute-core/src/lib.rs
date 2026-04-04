@@ -27,6 +27,16 @@ pub enum AppLanguage {
     PtBr,
     #[serde(rename = "es")]
     Es,
+    #[serde(rename = "fr")]
+    Fr,
+    #[serde(rename = "zh-Hans")]
+    ZhHans,
+    #[serde(rename = "hi")]
+    Hi,
+    #[serde(rename = "ar")]
+    Ar,
+    #[serde(rename = "bn")]
+    Bn,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -247,21 +257,19 @@ pub fn default_preset_catalog() -> Vec<PresetDefinition> {
             id: VisualPreset::Invert,
             label: "Invert".to_string(),
             family: EffectFamily::Transform,
-            summary: "A full-color invert for apps where non-grey color cues still matter."
-                .to_string(),
+            summary: "A full-color invert that preserves color cues.".to_string(),
         },
         PresetDefinition {
             id: VisualPreset::WarmDim,
             label: "Warm Dim".to_string(),
             family: EffectFamily::Tint,
-            summary: "A warmer amber tint that softens white-heavy legacy interfaces.".to_string(),
+            summary: "A warmer amber tint for bright interfaces.".to_string(),
         },
         PresetDefinition {
             id: VisualPreset::GreyscaleInvert,
             label: "Greyscale Invert".to_string(),
             family: EffectFamily::Transform,
-            summary: "A transform-mode preset aimed at harsh white screens that ignore dark mode."
-                .to_string(),
+            summary: "A greyscale invert for light interfaces that ignore dark mode.".to_string(),
         },
     ]
 }
