@@ -3,9 +3,8 @@ import { createRequire } from "node:module";
 
 const cliEntry = await realpath(new URL("../node_modules/@commitlint/cli/cli.js", import.meta.url));
 const requireFromCli = createRequire(cliEntry);
-const format = requireFromCli("@commitlint/format").default;
 const lint = requireFromCli("@commitlint/lint").default;
-const load = requireFromCli("@commitlint/load").default;
+const conventionalConfig = requireFromCli("@commitlint/config-conventional").default;
 
 const filePath = process.argv[2];
 
@@ -17,33 +16,22 @@ if (!filePath) {
 const rawMessage = await readFile(filePath, "utf8");
 const message = rawMessage.replace(/\r\n/g, "\n").trimEnd();
 
-const loaded = await load(
-  {},
-  {
-    cwd: process.cwd(),
-  }
-);
-
-const report = await lint(message, loaded.rules, {
-  defaultIgnores: loaded.defaultIgnores,
-  helpUrl: loaded.helpUrl,
-  ignores: loaded.ignores,
-  parserOpts: loaded.parserPreset?.parserOpts,
+const report = await lint(message, conventionalConfig.rules, {
+  defaultIgnores: true,
+  parserOpts: conventionalConfig.parserPreset?.parserOpts,
 });
 
 if (report.valid) {
   process.exit(0);
 }
 
-process.stderr.write(
-  format(
-    {
-      results: [report],
-    },
-    {
-      color: true,
-      helpUrl: loaded.helpUrl,
-    }
-  )
+console.error(`⧗   input: ${message}`);
+for (const error of report.errors) {
+  console.error(`✖   ${error.message} [${error.name}]`);
+}
+console.error("");
+console.error("✖   found %d problems, 0 warnings", report.errors.length);
+console.error(
+  "ⓘ   Get help: https://github.com/conventional-changelog/commitlint/#what-is-commitlint"
 );
 process.exit(1);
