@@ -154,11 +154,11 @@ impl ManagedState {
             .into_iter()
             .find(|candidate| candidate.logical_target_id == window_id)
             .ok_or_else(|| anyhow::anyhow!("The selected window is no longer available."))?;
-        let executable_path = descriptor
-            .executable_path
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("The selected window does not expose an executable path."))?;
+        let executable_path = descriptor.executable_path.clone().ok_or_else(|| {
+            anyhow::anyhow!("The selected window does not expose an executable path.")
+        })?;
         let label = profile_label_for_window(&descriptor);
+        let title_pattern = profile_title_pattern_for_window(&descriptor);
 
         let settings = {
             let mut store = self.settings_store.lock().expect("settings lock poisoned");
@@ -170,7 +170,7 @@ impl ManagedState {
                     label: label.clone(),
                     executable_path,
                     preset,
-                    title_pattern: None,
+                    title_pattern,
                     window_class: descriptor.window_class.clone(),
                     notes: None,
                 },
@@ -359,6 +359,10 @@ fn generate_profile_id(profile: &ProfileRule) -> String {
 }
 
 fn profile_label_for_window(descriptor: &glare_mute_core::WindowDescriptor) -> String {
+    if is_ambiguous_host_descriptor(descriptor) {
+        return descriptor.title.clone();
+    }
+
     descriptor
         .executable_path
         .as_deref()
@@ -366,8 +370,95 @@ fn profile_label_for_window(descriptor: &glare_mute_core::WindowDescriptor) -> S
         .unwrap_or_else(|| descriptor.title.clone())
 }
 
+fn profile_title_pattern_for_window(
+    descriptor: &glare_mute_core::WindowDescriptor,
+) -> Option<String> {
+    if is_ambiguous_host_descriptor(descriptor) {
+        return Some(normalize_title(&descriptor.title));
+    }
+
+    None
+}
+
+fn normalize_title(title: &str) -> String {
+    title.trim().to_lowercase()
+}
+
+fn is_ambiguous_host_descriptor(descriptor: &glare_mute_core::WindowDescriptor) -> bool {
+    descriptor
+        .window_class
+        .as_deref()
+        .map(|class_name| class_name.to_ascii_lowercase().contains("applicationframe"))
+        .unwrap_or(false)
+        || descriptor
+            .executable_path
+            .as_deref()
+            .and_then(executable_name)
+            .map(|name| is_host_process_name(&name))
+            .unwrap_or(false)
+}
+
+fn is_host_process_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "applicationframehost"
+            | "applicationframehost.exe"
+            | "systemsettings"
+            | "systemsettings.exe"
+    )
+}
+
 fn executable_name(path: &str) -> Option<String> {
     Path::new(path)
         .file_stem()
         .map(|name| name.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glare_mute_core::{WindowAttachmentState, WindowBounds, WindowDescriptor};
+
+    fn descriptor(title: &str, executable_path: &str, window_class: &str) -> WindowDescriptor {
+        WindowDescriptor {
+            window_id: "0x1".to_string(),
+            logical_target_id: "logical:1".to_string(),
+            secondary_label: None,
+            title: title.to_string(),
+            executable_path: Some(executable_path.to_string()),
+            process_id: 1234,
+            window_class: Some(window_class.to_string()),
+            bounds: WindowBounds {
+                left: 0,
+                top: 0,
+                width: 100,
+                height: 100,
+            },
+            attachment_state: WindowAttachmentState::Available,
+            is_foreground: false,
+        }
+    }
+
+    #[test]
+    fn uses_title_pattern_for_ambiguous_hosted_windows() {
+        let candidate = descriptor(
+            "Clock",
+            "C:\\Windows\\System32\\ApplicationFrameHost.exe",
+            "ApplicationFrameWindow",
+        );
+
+        assert_eq!(
+            profile_title_pattern_for_window(&candidate).as_deref(),
+            Some("clock")
+        );
+        assert_eq!(profile_label_for_window(&candidate), "Clock");
+    }
+
+    #[test]
+    fn keeps_plain_executable_profiles_for_normal_windows() {
+        let candidate = descriptor("Notepad", "C:\\Windows\\notepad.exe", "Notepad");
+
+        assert_eq!(profile_title_pattern_for_window(&candidate), None);
+        assert_eq!(profile_label_for_window(&candidate), "notepad");
+    }
 }

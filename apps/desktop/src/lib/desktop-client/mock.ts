@@ -217,6 +217,9 @@ function resolveProfileTargets(
   if (!applyToRelatedWindows) {
     return directMatches;
   }
+  if (directMatches.some((candidate) => isAmbiguousHostCandidate(candidate))) {
+    return directMatches;
+  }
 
   const processIds = new Set(directMatches.map((candidate) => candidate.processId));
   return dedupeLogicalTargets(
@@ -242,7 +245,13 @@ function profileMatchesCandidate(profile: ProfileRule, candidate: WindowDescript
   }
   if (profile.titlePattern) {
     const normalizedPattern = profile.titlePattern.trim().toLowerCase();
-    if (normalizedPattern && !candidate.title.toLowerCase().includes(normalizedPattern)) {
+    const normalizedTitle = candidate.title.trim().toLowerCase();
+    if (
+      normalizedPattern &&
+      !(isAmbiguousHostProfile(profile)
+        ? normalizedTitle === normalizedPattern
+        : normalizedTitle.includes(normalizedPattern))
+    ) {
       return false;
     }
   }
@@ -287,14 +296,44 @@ function upsertProfile(profiles: ProfileRule[], candidate: WindowDescriptor, pre
     label: profileLabelForWindow(candidate),
     executablePath,
     preset,
-    titlePattern: null,
+    titlePattern: profileTitlePatternForWindow(candidate),
     windowClass: candidate.windowClass ?? null,
     notes: null,
   });
 }
 
 function profileLabelForWindow(candidate: WindowDescriptor) {
+  if (isAmbiguousHostCandidate(candidate)) {
+    return candidate.title;
+  }
+
   return executableName(candidate.executablePath) ?? candidate.title;
+}
+
+function profileTitlePatternForWindow(candidate: WindowDescriptor) {
+  if (isAmbiguousHostCandidate(candidate)) {
+    return candidate.title.trim().toLowerCase();
+  }
+
+  return null;
+}
+
+function isAmbiguousHostCandidate(candidate: WindowDescriptor) {
+  return (
+    (candidate.windowClass ?? "").toLowerCase().includes("applicationframe") ||
+    isHostProcessName(executableName(candidate.executablePath))
+  );
+}
+
+function isAmbiguousHostProfile(profile: ProfileRule) {
+  return (
+    (profile.windowClass ?? "").toLowerCase().includes("applicationframe") ||
+    isHostProcessName(executableName(profile.executablePath))
+  );
+}
+
+function isHostProcessName(name: string | null) {
+  return name?.toLowerCase() === "applicationframehost" || name?.toLowerCase() === "systemsettings";
 }
 
 function fallbackProfileLabel(profile: ProfileRule) {

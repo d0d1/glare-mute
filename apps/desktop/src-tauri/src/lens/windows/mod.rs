@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use glare_mute_core::{
-    LensSnapshot, LensStatus, ProfileRule, ProfileSnapshot, VisualPreset,
-    WindowAttachmentState, WindowDescriptor,
+    LensSnapshot, LensStatus, ProfileRule, ProfileSnapshot, VisualPreset, WindowAttachmentState,
+    WindowDescriptor,
 };
 use windows::Win32::UI::Magnification::{
     MW_FILTERMODE_EXCLUDE, MagInitialize, MagSetWindowFilterList, MagUninitialize,
@@ -265,7 +265,10 @@ impl WorkerState {
 
     fn set_profiles(&mut self, profiles: Vec<ProfileRule>) -> Result<()> {
         for profile in &profiles {
-            if !matches!(profile.preset, VisualPreset::GreyscaleInvert | VisualPreset::Invert) {
+            if !matches!(
+                profile.preset,
+                VisualPreset::GreyscaleInvert | VisualPreset::Invert
+            ) {
                 bail!("This effect is not implemented in the native Windows path right now.");
             }
         }
@@ -275,7 +278,11 @@ impl WorkerState {
         self.sync_targets(true)?;
         self.tick();
         tracing::info!(
-            enabled_profiles = self.profiles.iter().filter(|profile| profile.enabled).count(),
+            enabled_profiles = self
+                .profiles
+                .iter()
+                .filter(|profile| profile.enabled)
+                .count(),
             apply_to_related_windows = self.apply_to_related_windows,
             "updated magnifier profile set"
         );
@@ -364,11 +371,8 @@ impl WorkerState {
         let mut assigned_window_ids = HashSet::new();
 
         for profile in &self.profiles {
-            let matching_candidates = resolve_profile_targets(
-                profile,
-                &logical_targets,
-                self.apply_to_related_windows,
-            );
+            let matching_candidates =
+                resolve_profile_targets(profile, &logical_targets, self.apply_to_related_windows);
             let matching_targets = matching_candidates
                 .iter()
                 .map(|candidate| candidate.descriptor.clone())
@@ -450,11 +454,10 @@ impl WorkerState {
                 continue;
             }
 
-            self.surfaces
-                .push(OverlaySurface::create(
-                    &assignment.raw_target.window_id,
-                    assignment.preset,
-                )?);
+            self.surfaces.push(OverlaySurface::create(
+                &assignment.raw_target.window_id,
+                assignment.preset,
+            )?);
         }
 
         self.refresh_filter_lists()?;
@@ -507,7 +510,11 @@ impl WorkerState {
     }
 
     fn status(&self) -> LensStatus {
-        let enabled_profiles = self.profiles.iter().filter(|profile| profile.enabled).count();
+        let enabled_profiles = self
+            .profiles
+            .iter()
+            .filter(|profile| profile.enabled)
+            .count();
         if enabled_profiles == 0 {
             return if self.suspended {
                 LensStatus::Suspended
@@ -538,7 +545,11 @@ impl WorkerState {
             .iter()
             .filter(|candidate| candidate.attachment_state == WindowAttachmentState::Available)
             .count();
-        let enabled_count = self.profiles.iter().filter(|profile| profile.enabled).count();
+        let enabled_count = self
+            .profiles
+            .iter()
+            .filter(|profile| profile.enabled)
+            .count();
         let summary = match status {
             LensStatus::Detached => "No saved apps are active.".to_string(),
             LensStatus::Pending => {
@@ -636,10 +647,26 @@ fn profile_matches_candidate(profile: &ProfileRule, candidate: &WindowDescriptor
             return true;
         }
 
-        return candidate.title.to_lowercase().contains(&normalized_pattern);
+        let normalized_title = normalize_title(&candidate.title);
+        if is_ambiguous_host_profile(profile) {
+            return normalized_title == normalized_pattern;
+        }
+
+        return normalized_title.contains(&normalized_pattern);
     }
 
     true
+}
+
+fn is_ambiguous_host_profile(profile: &ProfileRule) -> bool {
+    profile
+        .window_class
+        .as_deref()
+        .map(|class_name| class_name.to_ascii_lowercase().contains("applicationframe"))
+        .unwrap_or(false)
+        || executable_basename(Some(profile.executable_path.as_str()))
+            .map(|name| is_host_process_name(&name))
+            .unwrap_or(false)
 }
 
 fn profile_label(profile: &ProfileRule) -> String {
@@ -647,9 +674,8 @@ fn profile_label(profile: &ProfileRule) -> String {
         return profile.label.clone();
     }
 
-    executable_basename(Some(profile.executable_path.as_str())).unwrap_or_else(|| {
-        profile.executable_path.clone()
-    })
+    executable_basename(Some(profile.executable_path.as_str()))
+        .unwrap_or_else(|| profile.executable_path.clone())
 }
 
 fn enumerate_logical_targets() -> Result<Vec<LogicalWindowCandidate>> {
@@ -898,5 +924,44 @@ mod tests {
             ),
         );
         assert!(!should_surface_logical_target(&candidate));
+    }
+
+    #[test]
+    fn host_profiles_require_exact_title_match() {
+        let profile = ProfileRule {
+            id: "profile-clock".to_string(),
+            enabled: true,
+            label: "Clock".to_string(),
+            executable_path: "C:\\Windows\\System32\\ApplicationFrameHost.exe".to_string(),
+            preset: VisualPreset::Invert,
+            title_pattern: Some("clock".to_string()),
+            window_class: Some("ApplicationFrameWindow".to_string()),
+            notes: None,
+        };
+        let matching = WindowDescriptor {
+            window_id: "0x1".to_string(),
+            logical_target_id: "logical:clock".to_string(),
+            secondary_label: None,
+            title: "Clock".to_string(),
+            executable_path: Some("C:\\Windows\\System32\\ApplicationFrameHost.exe".to_string()),
+            process_id: 100,
+            window_class: Some("ApplicationFrameWindow".to_string()),
+            bounds: WindowBounds {
+                left: 0,
+                top: 0,
+                width: 100,
+                height: 100,
+            },
+            attachment_state: WindowAttachmentState::Available,
+            is_foreground: false,
+        };
+        let other_hosted = WindowDescriptor {
+            title: "Settings".to_string(),
+            logical_target_id: "logical:settings".to_string(),
+            ..matching.clone()
+        };
+
+        assert!(profile_matches_candidate(&profile, &matching));
+        assert!(!profile_matches_candidate(&profile, &other_hosted));
     }
 }

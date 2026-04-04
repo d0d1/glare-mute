@@ -124,4 +124,45 @@ describe("desktopClient mock runtime", () => {
 
     expect(nextSnapshot.windowCandidates.length).toBeGreaterThan(0);
   });
+
+  it("keeps hosted windows distinct when saving an ambiguous host app", async () => {
+    const snapshot = await desktopClient.bootstrapState();
+    snapshot.windowCandidates.push(
+      {
+        windowId: "0x20001",
+        logicalTargetId: "logical:hosted:clock",
+        secondaryLabel: null,
+        title: "Clock",
+        executablePath: "C:\\Windows\\System32\\ApplicationFrameHost.exe",
+        processId: 2200,
+        windowClass: "ApplicationFrameWindow",
+        bounds: { left: 0, top: 0, width: 400, height: 400 },
+        attachmentState: "available",
+        isForeground: false,
+      },
+      {
+        windowId: "0x20002",
+        logicalTargetId: "logical:hosted:settings",
+        secondaryLabel: null,
+        title: "Settings",
+        executablePath: "C:\\Windows\\System32\\ApplicationFrameHost.exe",
+        processId: 2200,
+        windowClass: "ApplicationFrameWindow",
+        bounds: { left: 420, top: 0, width: 800, height: 600 },
+        attachmentState: "available",
+        isForeground: false,
+      }
+    );
+    localStorage.setItem("glaremute:preview-snapshot", JSON.stringify(snapshot));
+
+    const savedSnapshot = await desktopClient.saveProfileFromWindow(
+      "logical:hosted:clock",
+      "invert"
+    );
+
+    expect(savedSnapshot.settings.profiles[0]?.titlePattern).toBe("clock");
+    expect(savedSnapshot.lens.coveredTargets.map((target) => target.logicalTargetId)).toEqual([
+      "logical:hosted:clock",
+    ]);
+  });
 });
