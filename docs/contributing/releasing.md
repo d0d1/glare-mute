@@ -45,6 +45,7 @@ That gives you downloadable signed artifacts from Actions while keeping GitHub R
 ## Draft beta release
 
 Do not create or publish a release tag until the `main` branch CI is green for the exact commit you intend to release.
+`main` CI now includes a Windows release-bundle validation job, so release artifact breakage should be caught before tagging instead of only after a release tag is pushed.
 Treat release-workflow changes as production code: validate everything locally that can be validated before push, then confirm the real GitHub run before trusting the release path.
 
 When the repo is ready for a draft beta, push a version tag that starts with `v`, for example:
