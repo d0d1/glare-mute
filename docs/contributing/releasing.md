@@ -42,6 +42,8 @@ That gives you downloadable signed artifacts from Actions while keeping GitHub R
 
 ## Draft beta release
 
+Do not create or publish a release tag until the `main` branch CI is green for the exact commit you intend to release.
+
 When the repo is ready for a draft beta, push a version tag that starts with `v`, for example:
 
 ```bash
@@ -58,6 +60,8 @@ That will:
 - create a draft GitHub Release with the signed assets attached
 
 ## Local verification before tagging
+
+Local verification is not a substitute for green GitHub CI. Treat local checks as a preflight, then confirm the matching `main` CI run is green before tagging.
 
 From Windows:
 
