@@ -51,8 +51,8 @@ Treat release-workflow changes as production code: validate everything locally t
 When the repo is ready for a draft beta, push a version tag that starts with `v`, for example:
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
 That will:
